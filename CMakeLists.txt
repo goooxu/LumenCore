@@ -11,6 +11,15 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 endif()
 
 find_package(CUDAToolkit REQUIRED)
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+
+include(FetchContent)
+FetchContent_Declare(
+  pybind11
+  GIT_REPOSITORY https://github.com/pybind/pybind11.git
+  GIT_TAG v2.13.6
+)
+FetchContent_MakeAvailable(pybind11)
 
 set(OPTIX_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/third_party/optix" CACHE PATH "OptiX include directory")
 if(NOT EXISTS "${OPTIX_INCLUDE_DIR}/optix.h")
@@ -31,9 +40,10 @@ target_include_directories(nrtx_host
     ${CUDAToolkit_INCLUDE_DIRS}
 )
 target_link_libraries(nrtx_host PUBLIC CUDA::cudart CUDA::cuda_driver)
+set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 
-# Compile device programs to OptiX-IR (PTX path runs ptxas on OptiX intrinsics and fails on CUDA 13)
+# Compile device programs to OptiX-IR
 set(NRTX_SHADER_CU ${CMAKE_SOURCE_DIR}/src/device/shaders.cu)
 set(NRTX_SHADER_OPTIXIR ${CMAKE_BINARY_DIR}/shaders.optixir)
 set(NRTX_NVCC_ARCH "compute_${CMAKE_CUDA_ARCHITECTURES}")
@@ -60,17 +70,24 @@ add_custom_command(
 
 add_custom_target(nrtx_shaders ALL DEPENDS ${NRTX_SHADER_OPTIXIR})
 
-function(nrtx_add_example name)
-  add_executable(${name} examples/${name}.cc)
-  target_link_libraries(${name} PRIVATE nrtx_host)
-  add_dependencies(${name} nrtx_shaders)
-  set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-endfunction()
+pybind11_add_module(lumencore bindings/lumencore_module.cpp)
+target_link_libraries(lumencore PRIVATE nrtx_host)
+add_dependencies(lumencore nrtx_shaders)
+set_target_properties(lumencore PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
+)
 
-nrtx_add_example(cornell)
-nrtx_add_example(materials_ball)
-nrtx_add_example(outdoor_env)
-nrtx_add_example(yellow_buddy)
-
-# Prefer OptiX-IR at runtime when present
-file(WRITE ${CMAKE_BINARY_DIR}/set_ptx_hint.sh "export NRTX_PTX=${CMAKE_BINARY_DIR}/shaders.optixir\n")
+option(LUMENCORE_BUILD_CPP_EXAMPLES "Build legacy C++ example binaries" OFF)
+if(LUMENCORE_BUILD_CPP_EXAMPLES)
+  function(nrtx_add_example name)
+    add_executable(${name} examples/${name}.cc)
+    target_link_libraries(${name} PRIVATE nrtx_host)
+    add_dependencies(${name} nrtx_shaders)
+    set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+  endfunction()
+  nrtx_add_example(cornell)
+  nrtx_add_example(materials_ball)
+  nrtx_add_example(outdoor_env)
+  nrtx_add_example(yellow_buddy)
+endif()

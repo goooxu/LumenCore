@@ -5,6 +5,18 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-15
+
+### Added
+
+- Python API module `lumencore` (pybind11) exposing Scene / Material / Camera / Renderer / mesh helpers / OBJ load
+- Python scene scripts under `python/scenes/` (`cornell`, `materials_ball`, `outdoor_env`, `yellow_buddy`)
+
+### Changed
+
+- Primary workflow is now Python; legacy C++ `examples/*.cc` removed from the default tree
+- `docker/run.sh` sets `PYTHONPATH` and builds `lumencore-build:cuda13` with Python headers when needed
+
 ## [0.3.2] - 2026-07-15
 
 ### Changed
@@ -48,6 +60,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
 - Docker-based build/run helper for RTX GPUs
 
+[0.4.0]: https://github.com/goooxu/LumenCore/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/goooxu/LumenCore/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/goooxu/LumenCore/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/goooxu/LumenCore/compare/v0.2.0...v0.3.0

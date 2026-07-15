@@ -19,6 +19,18 @@ if [[ ! -x "${CMAKE_DIR}/bin/cmake" ]]; then
   tar -xzf /tmp/cmake-linux.tgz -C "${CMAKE_DIR}" --strip-components=1
 fi
 
+# Ensure a CUDA image with Python headers exists for pybind11 builds.
+if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
+  if ! docker image inspect lumencore-build:cuda13 >/dev/null 2>&1; then
+    echo "Building lumencore-build:cuda13 (adds python3-dev) ..."
+    docker run --name lumencore-pysetup "${IMAGE}" bash -lc \
+      "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-dev git"
+    docker commit lumencore-pysetup lumencore-build:cuda13
+    docker rm lumencore-pysetup
+  fi
+  IMAGE="lumencore-build:cuda13"
+fi
+
 # NFS scratch is often not writable as root inside Docker; build/output stay on local disk.
 # Mount driver OptiX/RTX libraries — stock CUDA images do not ship them.
 docker run --rm --gpus all \
@@ -36,6 +48,7 @@ docker run --rm --gpus all \
   -e LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu \
   -e NRTX_PTX=/out/shaders.optixir \
   -e LUMENCORE_ROOT=/work \
+  -e PYTHONPATH=/out/python \
   -e HOME=/tmp \
   "${IMAGE}" \
   bash -lc "${CMD}"
