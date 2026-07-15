@@ -28,7 +28,7 @@ Open ground scene with chrome and glass props, soft sunlight, and a gradient env
 
 ![Yellow Buddy](outputs/yellow_buddy.png)
 
-Studio portrait of **Yellow Buddy**, an original capsule character loaded from Wavefront OBJ (`assets/models/yellow_buddy.obj`, ~10k triangles). Multi-material `usemtl` groups drive yellow body, blue overalls, metal goggles, glass lens, and boots. Inspired by the familiar “yellow helper” silhouette; not affiliated with any trademarked property.
+Studio portrait of **Yellow Buddy**, an original capsule character loaded from Wavefront OBJ (`assets/models/yellow_buddy.obj`, ~17k triangles with sculpted body, straps, arms, and boots). Multi-material `usemtl` groups drive yellow body, blue overalls, metal goggles, glass lens, and boots. Inspired by the familiar “yellow helper” silhouette; not affiliated with any trademarked property.
 
 ---
 

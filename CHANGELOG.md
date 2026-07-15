@@ -5,6 +5,13 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-07-15
+
+### Changed
+
+- Redesigned `yellow_buddy.obj` with richer structure (sculpted capsule body, overall straps/pockets, bent arms with gloves, boots, goggle stack) instead of only subdividing boxes (~17k triangles)
+- Re-rendered `outputs/yellow_buddy.png`
+
 ## [0.3.1] - 2026-07-15
 
 ### Changed
@@ -41,6 +48,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
 - Docker-based build/run helper for RTX GPUs
 
+[0.3.2]: https://github.com/goooxu/LumenCore/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/goooxu/LumenCore/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/goooxu/LumenCore/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/goooxu/LumenCore/compare/v0.1.0...v0.2.0
