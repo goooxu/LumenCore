@@ -1,0 +1,22 @@
+# Build
+/build/
+/out/
+cmake-build-*/
+compile_commands.json
+
+# Local render / temp
+*.o
+*.a
+*.optixir
+*.ptx
+/tmp/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+*.user
+
+# Optional local OptiX copies outside third_party
+/optix-include/
