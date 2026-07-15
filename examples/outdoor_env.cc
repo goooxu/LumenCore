@@ -45,8 +45,8 @@ int main(int argc, char **argv) {
   camera.focus_dist = 4.5f;
 
   RenderConfig cfg;
-  cfg.width = 1280;
-  cfg.height = 720;
+  cfg.width = 2560;
+  cfg.height = 1440;
   cfg.spp = spp;
   cfg.denoise = denoise;
   cfg.output_path = out;

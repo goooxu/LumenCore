@@ -48,8 +48,8 @@ int main(int argc, char **argv) {
   camera.aspect = 1.0f;
 
   RenderConfig cfg;
-  cfg.width = 800;
-  cfg.height = 800;
+  cfg.width = 2048;
+  cfg.height = 2048;
   cfg.spp = spp;
   cfg.denoise = denoise;
   cfg.output_path = out;

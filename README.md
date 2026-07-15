@@ -2,6 +2,8 @@
 
 GPU path tracer built with **OptiX 9 + CUDA 13**, validated on **RTX 5090**.
 
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
 ## Gallery
 
 ### Cornell Box
@@ -80,10 +82,10 @@ Set `NRTX_DOCKER_IMAGE` if your CUDA container has a different name (default: `n
 
 | Scene | Resolution | Path trace |
 |-------|------------|------------|
-| cornell | 800² | ~0.27 s |
-| materials_ball | 1280×720 | ~0.13 s |
-| outdoor_env | 1280×720 | ~0.12 s |
-| yellow_buddy | 1280×720 | ~0.18 s |
+| cornell | 2048×2048 | ~1.51 s |
+| materials_ball | 2560×1440 | ~0.50 s |
+| outdoor_env | 2560×1440 | ~0.43 s |
+| yellow_buddy | 2560×1440 | ~0.73 s |
 
 ## License
 
