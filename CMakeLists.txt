@@ -19,6 +19,7 @@ endif()
 
 add_library(nrtx_host
   src/host/mesh.cpp
+  src/host/obj_loader.cpp
   src/host/renderer.cpp
 )
 target_include_directories(nrtx_host
@@ -69,6 +70,7 @@ endfunction()
 nrtx_add_example(cornell)
 nrtx_add_example(materials_ball)
 nrtx_add_example(outdoor_env)
+nrtx_add_example(yellow_buddy)
 
 # Prefer OptiX-IR at runtime when present
 file(WRITE ${CMAKE_BINARY_DIR}/set_ptx_hint.sh "export NRTX_PTX=${CMAKE_BINARY_DIR}/shaders.optixir\n")

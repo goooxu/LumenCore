@@ -2,11 +2,40 @@
 
 GPU path tracer built with **OptiX 9 + CUDA 13**, validated on **RTX 5090**.
 
+## Gallery
+
+### Cornell Box
+
+![Cornell Box](outputs/cornell.png)
+
+Classic enclosed room with red / green walls, a glass sphere, a metal sphere, and a ceiling area light. Shows soft shadows, color bleeding, refraction caustics, and Next Event Estimation.
+
+### Materials Ball
+
+![Materials Ball](outputs/materials_ball.png)
+
+Material chart of diffuse, metal, and glass spheres under an area light. Useful for checking roughness / metallic / transmission response of the simplified PBR model.
+
+### Outdoor Env
+
+![Outdoor Env](outputs/outdoor_env.png)
+
+Open ground scene with chrome and glass props, soft sunlight, and a gradient environment. Includes a light depth-of-field camera.
+
+### Yellow Buddy (OBJ character)
+
+![Yellow Buddy](outputs/yellow_buddy.png)
+
+Studio portrait of **Yellow Buddy**, an original low-poly capsule character loaded from Wavefront OBJ (`assets/models/yellow_buddy.obj`). Multi-material `usemtl` groups drive yellow body, blue overalls, metal goggles, glass lens, and boots. Inspired by the familiar “yellow helper” silhouette; not affiliated with any trademarked property.
+
+---
+
 ## Features
 
 - Unidirectional path tracing + Next Event Estimation (quad area lights)
 - Russian Roulette; diffuse / metal / glass materials
 - Triangle-mesh GAS on OptiX RT Cores
+- Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map)
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 
@@ -29,11 +58,12 @@ chmod +x docker/run.sh
 ./docker/run.sh './bin/cornell /results/cornell.png 256 1'
 ./docker/run.sh './bin/materials_ball /results/materials_ball.png 256 1'
 ./docker/run.sh './bin/outdoor_env /results/outdoor_env.png 256 1'
+./docker/run.sh './bin/yellow_buddy /results/yellow_buddy.png 256 1'
 ```
 
 CLI: `program <output.png> [spp] [denoise=1|0]`
 
-Set `NRTX_DOCKER_IMAGE` if your CUDA/OptiX container has a different name. Build and render outputs use local `/tmp` paths so NFS-mounted source trees stay read-only inside the container.
+Set `NRTX_DOCKER_IMAGE` if your CUDA container has a different name (default: `nvidia/cuda:13.0.1-devel-ubuntu24.04`). The helper script mounts host OptiX/RTX driver libraries and denoiser weights. Build/render outputs use local `/tmp` so NFS source trees can stay read-only.
 
 ## Layout
 
@@ -41,8 +71,9 @@ Set `NRTX_DOCKER_IMAGE` if your CUDA/OptiX container has a different name. Build
 |------|------|
 | `include/nrtx` | Host scene API |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
-| `src/host` | Context, GAS, pipeline, denoiser, PNG I/O |
-| `examples` | cornell / materials_ball / outdoor_env |
+| `src/host` | Context, GAS, OBJ loader, denoiser, PNG I/O |
+| `assets/models` | Character OBJ / MTL |
+| `examples` | cornell / materials_ball / outdoor_env / yellow_buddy |
 | `outputs/` | Sample renders from RTX 5090 |
 
 ## Performance (RTX 5090, 256 spp, denoised)
@@ -52,7 +83,8 @@ Set `NRTX_DOCKER_IMAGE` if your CUDA/OptiX container has a different name. Build
 | cornell | 800² | ~0.27 s |
 | materials_ball | 1280×720 | ~0.13 s |
 | outdoor_env | 1280×720 | ~0.12 s |
+| yellow_buddy | 1280×720 | ~0.18 s |
 
 ## License
 
-Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms.
+Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. Yellow Buddy is an original asset bundled with this repository.

@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace nrtx {
@@ -93,5 +94,14 @@ Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int mater
 Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id);
 Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int slices = 48,
                     int stacks = 24);
+
+// Wavefront OBJ loader (triangles / fan-tessellated polygons; optional usemtl)
+Mesh load_obj(const std::string &path, int default_material_id);
+Mesh load_obj(const std::string &path,
+              const std::unordered_map<std::string, int> &materials_by_name,
+              int fallback_material_id);
+
+Mesh transform_mesh(const Mesh &input, const float3 &translate, const float3 &scale,
+                    const float3 &rotate_xyz_radians = make_float3(0.0f, 0.0f, 0.0f));
 
 } // namespace nrtx
