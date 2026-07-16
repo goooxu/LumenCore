@@ -5,6 +5,13 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-07-16
+
+### Changed
+
+- PhysX Collapse: larger **self-emissive** metal balls, darker studio lighting, and brick-sized **Sparky / Capsule Mascot** mixed into the tower
+- PhysX Collapse gallery keeps only two representative frames (`before.png`, `after.png`) plus the hero PNG
+
 ## [0.10.0] - 2026-07-16
 
 ### Added

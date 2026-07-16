@@ -22,7 +22,7 @@ Dark stone hearth lit almost entirely by a **procedural flame volume** (noise de
 
 ![PhysX Collapse](outputs/physx_collapse.png)
 
-Studio brick tower knocked over by heavy metal balls rolling down a ramp. **PhysX** advances GPU rigid bodies; each sampled frame rebuilds triangle meshes from actor poses and is path-traced with **OptiX**. Frame sequence: `outputs/physx_collapse/`; contact sheet: `outputs/physx_collapse/contact_sheet.png`.
+Studio brick tower knocked over by heavy **self-emissive** metal balls rolling down a ramp in a darker studio. Brick-sized **Sparky** and **Capsule Mascot** are mixed into the tower. **PhysX** advances GPU rigid bodies; sampled poses are path-traced with **OptiX**. Gallery: `outputs/physx_collapse.png` plus two beats in `outputs/physx_collapse/` (`before.png`, `after.png`).
 
 ### Cornell Box
 
@@ -107,7 +107,7 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 
 CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
 
-`physx_collapse` writes a frame sequence under `<out_stem>/` plus a gallery hero PNG.
+`physx_collapse` writes a gallery hero PNG plus two representative frames (`before.png`, `after.png`) under `<out_stem>/`.
 
 `fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
 
