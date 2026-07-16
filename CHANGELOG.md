@@ -10,8 +10,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Added
 
 - Dielectric **Beer-Lambert absorption** (`Material.absorption`) with medium tracking in the path tracer
-- Water pool demo: `python/scenes/water_pool.py`, `assets/models/water_surface.obj`, gallery `outputs/water_pool.png`
-- `scripts/gen_water_surface.py` to regenerate the wavy closed water body
+- Procedural water heightfield: `make_water_surface(..., time)`
+- Water pool demo: `python/scenes/water_pool.py`, gallery `outputs/water_pool.png`
 
 ## [0.7.0] - 2026-07-16
 

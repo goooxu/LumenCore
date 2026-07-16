@@ -109,6 +109,54 @@ Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int sli
   return mesh;
 }
 
+Mesh make_water_surface(const float3 &center, const float3 &half_extents_xz, float y_base,
+                        int material_id, int nx, int nz, float time) {
+  Mesh mesh;
+  if (nx < 1) {
+    nx = 1;
+  }
+  if (nz < 1) {
+    nz = 1;
+  }
+  const float hx = half_extents_xz.x;
+  const float hz = half_extents_xz.z > 0.0f ? half_extents_xz.z : half_extents_xz.y;
+
+  auto wave_y = [&](float x, float z) {
+    const float t = time;
+    return 0.045f * std::sin(2.3f * x + 1.1f * z + t * 1.7f) +
+           0.028f * std::sin(3.5f * z - 1.4f * x + t * 2.3f) +
+           0.016f * std::sin(5.2f * x + 4.1f * z - t * 1.1f);
+  };
+
+  for (int j = 0; j <= nz; ++j) {
+    const float vz = static_cast<float>(j) / static_cast<float>(nz);
+    const float z = center.z - hz + 2.0f * hz * vz;
+    for (int i = 0; i <= nx; ++i) {
+      const float ux = static_cast<float>(i) / static_cast<float>(nx);
+      const float x = center.x - hx + 2.0f * hx * ux;
+      const float y = y_base + wave_y(x, z);
+      mesh.vertices.push_back(make_float3(x, y, z));
+      mesh.texcoords.push_back(make_float2(ux, vz));
+    }
+  }
+
+  const int stride = nx + 1;
+  for (int j = 0; j < nz; ++j) {
+    for (int i = 0; i < nx; ++i) {
+      const int i0 = j * stride + i;
+      const int i1 = i0 + 1;
+      const int i2 = i0 + stride;
+      const int i3 = i2 + 1;
+      // CCW when viewed from above (normals point +Y)
+      mesh.indices.push_back(make_int3(i0, i1, i3));
+      mesh.indices.push_back(make_int3(i0, i3, i2));
+      mesh.material_ids.push_back(material_id);
+      mesh.material_ids.push_back(material_id);
+    }
+  }
+  return mesh;
+}
+
 namespace {
 
 float3 rotate_by_quat(const float3 &v, const float4 &q) {

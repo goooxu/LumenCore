@@ -233,6 +233,16 @@ PYBIND11_MODULE(lumencore, m) {
       py::arg("stacks") = 24);
 
   m.def(
+      "make_water_surface",
+      [](const py::object &center, const py::object &half_extents_xz, float y_base, int material_id,
+         int nx, int nz, float time) {
+        return make_water_surface(to_float3(center), to_float3(half_extents_xz), y_base, material_id,
+                                  nx, nz, time);
+      },
+      py::arg("center"), py::arg("half_extents_xz"), py::arg("y_base"), py::arg("material_id"),
+      py::arg("nx") = 64, py::arg("nz") = 48, py::arg("time") = 0.0f);
+
+  m.def(
       "load_obj",
       [](const std::string &path, int default_material_id) {
         return load_obj(path, default_material_id);

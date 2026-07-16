@@ -46,7 +46,7 @@ Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotligh
 
 ![Water Pool](outputs/water_pool.png)
 
-Stone pool with a **wavy water volume** (IOR 1.33 + Beer-Lambert absorption): underwater chrome and coral props, Fresnel reflections at grazing angles, and depth-tinted refraction through the water body.
+Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1.33 + Beer-Lambert absorption). Far-deck chrome and colored spheres show clear **reflections** at a grazing camera angle; a single submerged accent demonstrates refraction.
 
 ---
 
@@ -62,6 +62,7 @@ Stone pool with a **wavy water volume** (IOR 1.33 + Beer-Lambert absorption): un
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
 - Spot lights (`Scene.add_spot_light`)
 - Dielectric **Beer-Lambert absorption** (`Material.absorption`) for water / tinted glass
+- Procedural water surfaces (`make_water_surface`)
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 
@@ -100,6 +101,8 @@ CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
 `physx_collapse` extra arg: `[prefer_gpu=1|0]` — writes a frame sequence under `<out_stem>/` plus a gallery hero PNG.
 
 `fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
+
+`water_pool` extra arg: `[time]` — procedural water wave phase.
 
 Example API usage:
 

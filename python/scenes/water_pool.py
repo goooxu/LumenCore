@@ -1,115 +1,108 @@
 #!/usr/bin/env python3
-"""Stone pool with wavy water (Beer-Lambert absorption) for LumenCore."""
+"""Stone pool with procedural wavy water and above-water reflections."""
 from __future__ import print_function
 
-import os
-import subprocess
 import sys
-from pathlib import Path
 
 import lumencore as lc
-
-
-def resolve_asset(relative):
-    candidates = []
-    root = os.environ.get("LUMENCORE_ROOT")
-    if root:
-        candidates.append(str(Path(root) / relative))
-    candidates.extend(
-        [
-            relative,
-            str(Path("..") / relative),
-            str(Path("../..") / relative),
-            str(Path("/work") / relative),
-        ]
-    )
-    for path in candidates:
-        if Path(path).is_file():
-            return path
-    return candidates[0]
-
-
-def ensure_water_obj():
-    path = resolve_asset("assets/models/water_surface.obj")
-    if Path(path).is_file():
-        return path
-    # Generate next to repo if missing
-    script = resolve_asset("scripts/gen_water_surface.py")
-    if Path(script).is_file():
-        subprocess.check_call([sys.executable, script])
-    return resolve_asset("assets/models/water_surface.obj")
 
 
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "water_pool.png"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 256
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
+    time = float(sys.argv[4]) if len(sys.argv) > 4 else 1.25
 
     scene = lc.Scene()
 
-    stone = scene.add_material(lc.Material(base_color=(0.42, 0.40, 0.38), roughness=0.88))
-    stone_dark = scene.add_material(lc.Material(base_color=(0.28, 0.27, 0.26), roughness=0.9))
-    wood = scene.add_material(lc.Material(base_color=(0.45, 0.28, 0.14), roughness=0.75))
+    stone = scene.add_material(lc.Material(base_color=(0.40, 0.38, 0.36), roughness=0.88))
+    stone_dark = scene.add_material(lc.Material(base_color=(0.26, 0.25, 0.24), roughness=0.9))
+    wood = scene.add_material(lc.Material(base_color=(0.48, 0.30, 0.14), roughness=0.72))
+    tile = scene.add_material(lc.Material(base_color=(0.50, 0.58, 0.55), roughness=0.5))
+    sand = scene.add_material(lc.Material(base_color=(0.62, 0.58, 0.50), roughness=0.95))
     water = scene.add_material(
         lc.Material(
-            base_color=(0.6, 0.85, 0.9),
+            base_color=(0.7, 0.88, 0.92),
             roughness=0.0,
             transmission=1.0,
             ior=1.33,
-            absorption=(0.35, 0.12, 0.08),
+            absorption=(0.28, 0.10, 0.06),
         )
     )
-    tile = scene.add_material(lc.Material(base_color=(0.55, 0.62, 0.58), roughness=0.55))
-    coral = scene.add_material(lc.Material(base_color=(0.85, 0.25, 0.22), roughness=0.45))
     chrome = scene.add_material(
-        lc.Material(base_color=(0.95, 0.95, 0.98), metallic=1.0, roughness=0.05)
+        lc.Material(base_color=(0.95, 0.95, 0.98), metallic=1.0, roughness=0.04)
     )
-    sand = scene.add_material(lc.Material(base_color=(0.72, 0.65, 0.48), roughness=0.95))
+    accent = scene.add_material(lc.Material(base_color=(0.90, 0.22, 0.18), roughness=0.35))
+    accent_b = scene.add_material(lc.Material(base_color=(0.15, 0.45, 0.85), roughness=0.4))
 
-    # Outer ground
-    scene.add_mesh(lc.make_quad((-6, 0, -6), (12, 0, 0), (0, 0, 12), sand))
+    # Ground
+    scene.add_mesh(lc.make_quad((-8, 0, -8), (16, 0, 0), (0, 0, 16), sand))
 
-    # Cutaway pool: omit +Z wall so the camera sees into the water.
-    scene.add_mesh(lc.make_box((-1.85, 0.0, -1.25), (1.85, 0.08, 1.05), tile))  # pool floor
-    scene.add_mesh(lc.make_box((-1.85, 0.08, -1.25), (1.85, 0.72, -0.95), stone))  # -Z
-    scene.add_mesh(lc.make_box((-1.85, 0.08, -0.95), (-1.55, 0.72, 0.95), stone))  # -X
-    scene.add_mesh(lc.make_box((1.55, 0.08, -0.95), (1.85, 0.72, 0.95), stone))  # +X
-    # Coping on three sides
-    scene.add_mesh(lc.make_box((-2.05, 0.72, -1.45), (2.05, 0.82, -0.95), stone_dark))
-    scene.add_mesh(lc.make_box((-2.05, 0.72, -0.95), (-1.55, 0.82, 1.05), stone_dark))
-    scene.add_mesh(lc.make_box((1.55, 0.72, -0.95), (2.05, 0.82, 1.05), stone_dark))
-    # Deck behind pool
-    scene.add_mesh(lc.make_box((-2.4, 0.82, -2.5), (2.4, 0.90, -1.45), wood))
+    # Full four-walled stone pool (inner approx x,z in [-1.7,1.7]x[-1.1,1.1])
+    scene.add_mesh(lc.make_box((-2.0, 0.0, -1.4), (2.0, 0.08, 1.4), tile))  # floor
+    scene.add_mesh(lc.make_box((-2.0, 0.08, -1.4), (2.0, 0.70, -1.1), stone))  # -Z
+    scene.add_mesh(lc.make_box((-2.0, 0.08, 1.1), (2.0, 0.70, 1.4), stone))  # +Z
+    scene.add_mesh(lc.make_box((-2.0, 0.08, -1.1), (-1.7, 0.70, 1.1), stone))  # -X
+    scene.add_mesh(lc.make_box((1.7, 0.08, -1.1), (2.0, 0.70, 1.1), stone))  # +X
+    # Coping rim only (NOT a solid slab — that previously covered the water)
+    scene.add_mesh(lc.make_box((-2.2, 0.70, -1.6), (2.2, 0.80, -1.4), stone_dark))  # -Z
+    scene.add_mesh(lc.make_box((-2.2, 0.70, 1.4), (2.2, 0.80, 1.6), stone_dark))  # +Z
+    scene.add_mesh(lc.make_box((-2.2, 0.70, -1.4), (-2.0, 0.80, 1.4), stone_dark))  # -X
+    scene.add_mesh(lc.make_box((2.0, 0.70, -1.4), (2.2, 0.80, 1.4), stone_dark))  # +X
+    # Far deck (-Z) for reflection props
+    scene.add_mesh(lc.make_box((-2.4, 0.80, -2.7), (2.4, 0.88, -1.6), wood))
 
-    water_path = ensure_water_obj()
-    water_mesh = lc.load_obj(water_path, {"Water": water}, water)
+    # Procedural water surface (generated each run; phase = time)
+    water_mesh = lc.make_water_surface(
+        center=(0.0, 0.0, 0.0),
+        half_extents_xz=(1.65, 0.0, 1.05),
+        y_base=0.58,
+        material_id=water,
+        nx=96,
+        nz=64,
+        time=time,
+    )
     scene.add_mesh(water_mesh)
-    print("Loaded {}".format(water_path))
+    print("Procedural water surface time={}".format(time))
 
-    # Underwater props (inside water volume)
-    scene.add_mesh(lc.make_uv_sphere((-0.55, 0.28, 0.15), 0.22, coral))
-    scene.add_mesh(lc.make_uv_sphere((0.65, 0.32, -0.25), 0.26, chrome))
-    scene.add_mesh(lc.make_box((-0.15, 0.08, 0.35), (0.25, 0.22, 0.65), stone_dark))
+    # Above-water reflection subjects on far deck (clear of water edge)
+    scene.add_mesh(lc.make_uv_sphere((-0.55, 1.35, -2.15), 0.38, chrome))
+    scene.add_mesh(lc.make_uv_sphere((0.70, 1.28, -2.20), 0.34, accent))
+    # Thin posts so spheres read as standing above water
+    scene.add_mesh(lc.make_box((-0.58, 0.88, -2.18), (-0.52, 1.10, -2.12), stone_dark))
+    scene.add_mesh(lc.make_box((0.67, 0.88, -2.23), (0.73, 1.06, -2.17), stone_dark))
+    # One submerged accent for refraction only (pool center, not at edge)
+    scene.add_mesh(lc.make_uv_sphere((0.15, 0.22, 0.1), 0.18, accent_b))
 
-    light_corner = (2.5, 5.5, -1.5)
-    light_u = (2.0, 0.0, 0.4)
-    light_v = (0.0, 0.0, 2.0)
+    # Soft sun
+    light_corner = (3.0, 5.8, -0.5)
+    light_u = (2.2, 0.0, 0.3)
+    light_v = (-0.2, 0.0, 2.2)
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(28, 26, 22))
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(36, 34, 28))
     )
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (28, 26, 22))
+    scene.add_quad_light(light_corner, light_u, light_v, (36, 34, 28))
+    # Fill from side so deck props light the water
+    scene.add_spot_light(
+        position=(-1.5, 3.8, 2.0),
+        direction=(0.3, -0.75, -0.6),
+        emission=(70, 64, 55),
+        angle_deg=32.0,
+        penumbra_deg=14.0,
+    )
 
-    scene.background_top = (0.40, 0.58, 0.85)
-    scene.background_bottom = (0.55, 0.62, 0.70)
+    scene.background_top = (0.42, 0.60, 0.88)
+    scene.background_bottom = (0.58, 0.64, 0.72)
 
+    # Grazing view across open water toward far-deck props / reflections
     camera = lc.Camera(
-        eye=(-2.4, 1.65, 3.6),
-        lookat=(0.05, 0.30, 0.0),
-        fov_y_deg=42,
+        eye=(0.1, 1.05, 3.2),
+        lookat=(0.05, 0.70, -0.9),
+        fov_y_deg=40,
         aspect=16 / 9,
-        aperture=0.012,
-        focus_dist=4.3,
+        aperture=0.008,
+        focus_dist=3.8,
     )
     cfg = lc.RenderConfig(width=2560, height=1440, spp=spp, denoise=denoise, output_path=out)
     lc.Renderer().render(scene, camera, cfg)

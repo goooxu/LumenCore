@@ -130,6 +130,8 @@ Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int mater
 Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id);
 Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int slices = 48,
                     int stacks = 24);
+Mesh make_water_surface(const float3 &center, const float3 &half_extents_xz, float y_base,
+                        int material_id, int nx = 64, int nz = 48, float time = 0.0f);
 
 Mesh load_obj(const std::string &path, int default_material_id);
 Mesh load_obj(const std::string &path,
