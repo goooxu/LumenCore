@@ -14,6 +14,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Fixed
 
 - 技术报告公式分隔符改为 GitHub 支持的 `$` / `$$`（原 `\(...\)` / `\[...\]` 在 GitHub 上不渲染）
+- 含下标 `_` 的行内公式改用 `$`...`$`，块级改用 \`\`\`math，避免 Markdown 把 `_` 当斜体导致 MathJax 报错
 
 ## [0.10.1] - 2026-07-16
 

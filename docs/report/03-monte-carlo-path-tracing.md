@@ -2,17 +2,17 @@
 
 ## 蒙特卡洛一句话
 
-若你要算期望 $\mathbb{E}[f(X)]$，可以抽很多独立样本 $X_1,\ldots,X_N$，用平均近似：
+若你要算期望 $\mathbb{E}[f(X)]$，可以抽很多独立样本 $`X_1,\ldots,X_N`$，用平均近似：
 
-$$
+```math
 \frac{1}{N}\sum_{i=1}^N f(X_i)\;\approx\;\mathbb{E}[f(X)].
-$$
+```
 
 积分 $\int g(x)\,dx$ 也可以写成期望：先选一个概率密度 $p(x)$，令 $f(X)=g(X)/p(X)$。于是
 
-$$
+```math
 \int g(x)\,dx = \mathbb{E}\!\left[\frac{g(X)}{p(X)}\right].
-$$
+```
 
 **样本越多，噪声越小**——所以路径追踪常说 spp（samples per pixel）。
 
@@ -38,11 +38,11 @@ $$
 
 每次弹射：
 
-$$
+```math
 T \leftarrow T \cdot \frac{f_r\cdot\cos\theta}{p(\omega)}.
-$$
+```
 
-最终像素颜色是各次「撞到发光体」时 $T \times L_e$ 的累加。  
+最终像素颜色是各次「撞到发光体」时 $`T \times L_e`$ 的累加。  
 这样，越晚、越暗的材质，对结果贡献越小——符合物理。
 
 ## 重要性采样（直觉）

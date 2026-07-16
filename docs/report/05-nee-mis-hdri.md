@@ -21,18 +21,18 @@
 
 NEE 在 closesthit 中、且材质**不是玻璃、不是自发光**时启用（`enable_nee`）。
 
-对面光：采样灯上一点 → 阴影测试 → 用 `eval_opaque_bsdf` 得 $f_r$ 与 `pdf_bsdf` → 用灯的立体角 pdf 做 MIS。
+对面光：采样灯上一点 → 阴影测试 → 用 `eval_opaque_bsdf` 得 $`f_r`$ 与 `pdf_bsdf` → 用灯的立体角 pdf 做 MIS。
 
 ## 平衡启发式 MIS
 
 同一光照贡献可能被「灯采样」和「BSDF 采样」两种策略估到。Balance heuristic：
 
-$$
+```math
 w_a=\frac{p_a}{p_a+p_b}.
-$$
+```
 
 代码：`mis_balance(pdf_a, pdf_b)`（`bsdf.h`）。  
-NEE 时用 $w=\mathrm{mis\_balance}(p_{\mathrm{light}}, p_{\mathrm{bsdf}})$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权，避免与环境 NEE 双重计数。
+NEE 时权重为 $`w = p_{\mathrm{light}} / (p_{\mathrm{light}} + p_{\mathrm{bsdf}})`$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权，避免与环境 NEE 双重计数。
 
 ## HDRI 环境贴图
 
