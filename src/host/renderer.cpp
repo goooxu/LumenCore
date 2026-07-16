@@ -541,6 +541,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     materials_gpu[i].transmission = m.transmission;
     materials_gpu[i].ior = m.ior;
     materials_gpu[i].emission = m.emission;
+    materials_gpu[i].absorption = m.absorption;
     materials_gpu[i].flags = m.flags;
     materials_gpu[i].volume_index = m.volume_index;
     materials_gpu[i].albedo_tex = m.albedo_tex;

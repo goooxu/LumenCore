@@ -17,6 +17,7 @@ struct RadiancePRD {
   float3 radiance;
   float3 albedo_aov;
   float3 normal_aov;
+  float3 medium_sigma;
   unsigned seed;
   int depth;
   int done;
@@ -65,6 +66,17 @@ __forceinline__ __device__ bool refract(const float3 &v, const float3 &n, float 
   const float cos_t = sqrtf(1.0f - sin2_t);
   out = eta * v + (eta * cos_i - cos_t) * n;
   return true;
+}
+
+__forceinline__ __device__ float3 beer_attenuate(const float3 &sigma, float dist) {
+  return make_float3(expf(-sigma.x * dist), expf(-sigma.y * dist), expf(-sigma.z * dist));
+}
+
+__forceinline__ __device__ void apply_medium_absorption(RadiancePRD *prd, float dist) {
+  if (dist > 0.0f && (prd->medium_sigma.x > 0.0f || prd->medium_sigma.y > 0.0f ||
+                      prd->medium_sigma.z > 0.0f)) {
+    prd->throughput = prd->throughput * beer_attenuate(prd->medium_sigma, dist);
+  }
 }
 
 __forceinline__ __device__ float fresnel_schlick(float cos_theta, float f0) {
@@ -406,6 +418,7 @@ extern "C" __global__ void __raygen__rg() {
     prd.radiance = make_float3(0.0f, 0.0f, 0.0f);
     prd.albedo_aov = make_float3(0.0f, 0.0f, 0.0f);
     prd.normal_aov = make_float3(0.0f, 0.0f, 0.0f);
+    prd.medium_sigma = make_float3(0.0f, 0.0f, 0.0f);
     prd.seed = seed;
     prd.depth = 0;
     prd.done = 0;
@@ -455,6 +468,10 @@ extern "C" __global__ void __raygen__rg() {
 
 extern "C" __global__ void __miss__radiance() {
   RadiancePRD *prd = get_radiance_prd();
+  const float t_hit = optixGetRayTmax();
+  // Cap miss distance for absorption so underwater sky looks tinted but finite.
+  const float abs_dist = fminf(t_hit, 20.0f);
+  apply_medium_absorption(prd, abs_dist);
   prd->radiance += prd->throughput * env_color(prd->direction);
   if (prd->first_hit) {
     prd->albedo_aov = env_color(prd->direction);
@@ -469,6 +486,9 @@ extern "C" __global__ void __closesthit__radiance() {
   const nrtx::HitGroupData *hit_data =
       reinterpret_cast<nrtx::HitGroupData *>(optixGetSbtDataPointer());
 
+  const float t_hit = optixGetRayTmax();
+  apply_medium_absorption(prd, t_hit);
+
   const int prim_idx = optixGetPrimitiveIndex();
   const int3 index = hit_data->indices[prim_idx];
   const float3 v0 = hit_data->vertices[index.x];
@@ -480,13 +500,12 @@ extern "C" __global__ void __closesthit__radiance() {
   float3 n_obj = nrtx::normalize(nrtx::cross(v1 - v0, v2 - v0));
 
   const float3 p = optixTransformPointFromObjectToWorldSpace(p_obj);
-  float3 n = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_obj));
+  float3 ng = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_obj));
 
   const float3 ray_dir = optixGetWorldRayDirection();
   const float3 ray_origin = optixGetWorldRayOrigin();
-  if (nrtx::dot(n, ray_dir) > 0.0f) {
-    n = -n;
-  }
+  const bool front_facing = nrtx::dot(ray_dir, ng) < 0.0f;
+  float3 n = front_facing ? ng : -ng;
 
   const int mat_id = hit_data->material_ids[prim_idx];
   const nrtx::MaterialGPU mat = params.materials[mat_id];
@@ -569,17 +588,24 @@ extern "C" __global__ void __closesthit__radiance() {
 
   const float r_mat = nrtx::rnd(prd->seed);
   if (mat.transmission > 0.5f) {
-    const float entering = nrtx::dot(ray_dir, n) < 0.0f ? 1.0f : -1.0f;
-    const float3 outward_n = entering > 0.0f ? n : -n;
-    const float eta = entering > 0.0f ? (1.0f / mat.ior) : mat.ior;
-    const float cos_theta = fminf(1.0f, fabsf(nrtx::dot(wo, outward_n)));
+    // front_facing => hitting outward side from outside => entering medium.
+    const float3 ior_n = front_facing ? ng : -ng;
+    const float eta = front_facing ? (1.0f / mat.ior) : mat.ior;
+    const float cos_theta = fminf(1.0f, fabsf(nrtx::dot(wo, ior_n)));
     const float f0 = powf((1.0f - mat.ior) / (1.0f + mat.ior), 2.0f);
     const float reflect_prob = fresnel_schlick(cos_theta, f0);
     float3 refracted;
-    if (nrtx::rnd(prd->seed) < reflect_prob || !refract(ray_dir, outward_n, eta, refracted)) {
-      wi = nrtx::reflect(ray_dir, outward_n);
+    const bool reflect_only =
+        nrtx::rnd(prd->seed) < reflect_prob || !refract(ray_dir, ior_n, eta, refracted);
+    if (reflect_only) {
+      wi = nrtx::reflect(ray_dir, ior_n);
     } else {
       wi = nrtx::normalize(refracted);
+      if (front_facing) {
+        prd->medium_sigma = mat.absorption;
+      } else {
+        prd->medium_sigma = make_float3(0.0f, 0.0f, 0.0f);
+      }
     }
     f = make_float3(1.0f, 1.0f, 1.0f);
     pdf = 1.0f;

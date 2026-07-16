@@ -24,6 +24,7 @@ struct MaterialGPU {
   float transmission;
   float ior;
   float3 emission;
+  float3 absorption; // Beer-Lambert sigma_a inside medium
   int flags;
   int volume_index;
   int albedo_tex; // -1 = none

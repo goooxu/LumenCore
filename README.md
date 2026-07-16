@@ -42,6 +42,12 @@ Open ground scene with chrome and glass props, soft sunlight, and a gradient env
 
 Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`, CC0).
 
+### Water Pool
+
+![Water Pool](outputs/water_pool.png)
+
+Stone pool with a **wavy water volume** (IOR 1.33 + Beer-Lambert absorption): underwater chrome and coral props, Fresnel reflections at grazing angles, and depth-tinted refraction through the water body.
+
 ---
 
 ## Features
@@ -55,6 +61,7 @@ Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotligh
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
 - Spot lights (`Scene.add_spot_light`)
+- Dielectric **Beer-Lambert absorption** (`Material.absorption`) for water / tinted glass
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 
@@ -85,6 +92,7 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/sparky.py /results/sparky.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.png 128 1 1'
 ./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.png 256 1'
+./docker/run.sh 'python3 /work/python/scenes/water_pool.py /results/water_pool.png 256 1'
 ```
 
 CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
@@ -117,7 +125,7 @@ lc.Renderer().render(scene, cam, cfg)
 | Path | Role |
 |------|------|
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace) |
+| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace, water_pool) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ loader, denoiser, PNG I/O |
@@ -136,6 +144,7 @@ lc.Renderer().render(scene, cam, cfg)
 | sparky | 2560×1440 | Sparky + Capsule Mascot duo |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
 | fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
+| water_pool | 2560×1440 | wavy water + Beer-Lambert absorption |
 
 ## License
 

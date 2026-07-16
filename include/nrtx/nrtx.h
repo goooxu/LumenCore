@@ -31,6 +31,7 @@ struct Material {
   float transmission = 0.0f;
   float ior = 1.5f;
   float3 emission = make_float3(0.0f, 0.0f, 0.0f);
+  float3 absorption = make_float3(0.0f, 0.0f, 0.0f); // Beer-Lambert sigma_a
   int flags = MATERIAL_FLAG_NONE;
   int volume_index = -1;
   int albedo_tex = -1; // index into Scene::textures, -1 = solid base_color

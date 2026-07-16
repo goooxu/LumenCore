@@ -40,7 +40,8 @@ struct Vec3 {
 };
 
 Material make_material(const py::object &base_color, float metallic, float roughness,
-                       float transmission, float ior, const py::object &emission, int albedo_tex) {
+                       float transmission, float ior, const py::object &emission, int albedo_tex,
+                       const py::object &absorption) {
   Material m;
   m.base_color = to_float3(base_color);
   m.metallic = metallic;
@@ -49,6 +50,7 @@ Material make_material(const py::object &base_color, float metallic, float rough
   m.ior = ior;
   m.emission = to_float3(emission);
   m.albedo_tex = albedo_tex;
+  m.absorption = to_float3(absorption);
   return m;
 }
 
@@ -79,13 +81,15 @@ PYBIND11_MODULE(lumencore, m) {
 
   py::class_<Material>(m, "Material")
       .def(py::init([](const py::object &base_color, float metallic, float roughness,
-                       float transmission, float ior, const py::object &emission, int albedo_tex) {
+                       float transmission, float ior, const py::object &emission, int albedo_tex,
+                       const py::object &absorption) {
              return make_material(base_color, metallic, roughness, transmission, ior, emission,
-                                  albedo_tex);
+                                  albedo_tex, absorption);
            }),
            py::arg("base_color") = py::make_tuple(0.8f, 0.8f, 0.8f), py::arg("metallic") = 0.0f,
            py::arg("roughness") = 0.5f, py::arg("transmission") = 0.0f, py::arg("ior") = 1.5f,
-           py::arg("emission") = py::make_tuple(0.0f, 0.0f, 0.0f), py::arg("albedo_tex") = -1)
+           py::arg("emission") = py::make_tuple(0.0f, 0.0f, 0.0f), py::arg("albedo_tex") = -1,
+           py::arg("absorption") = py::make_tuple(0.0f, 0.0f, 0.0f))
       .def_property(
           "base_color", [](const Material &mat) { return from_float3(mat.base_color); },
           [](Material &mat, const py::object &v) { mat.base_color = to_float3(v); })
@@ -96,7 +100,10 @@ PYBIND11_MODULE(lumencore, m) {
       .def_property(
           "emission", [](const Material &mat) { return from_float3(mat.emission); },
           [](Material &mat, const py::object &v) { mat.emission = to_float3(v); })
-      .def_readwrite("albedo_tex", &Material::albedo_tex);
+      .def_readwrite("albedo_tex", &Material::albedo_tex)
+      .def_property(
+          "absorption", [](const Material &mat) { return from_float3(mat.absorption); },
+          [](Material &mat, const py::object &v) { mat.absorption = to_float3(v); });
 
   py::class_<Camera>(m, "Camera")
       .def(py::init([](const py::object &eye, const py::object &lookat, const py::object &up,
