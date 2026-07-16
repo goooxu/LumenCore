@@ -46,6 +46,15 @@ struct QuadLight {
   int pad;
 };
 
+struct SpotLight {
+  float3 position;
+  float3 direction; // normalized aim
+  float3 emission;
+  float cos_inner;
+  float cos_outer;
+  float pad;
+};
+
 struct FlameVolume {
   float3 center;
   float3 half_extents;
@@ -81,6 +90,8 @@ struct LaunchParams {
   int material_count;
   QuadLight *lights;
   int light_count;
+  SpotLight *spots;
+  int spot_count;
   FlameVolume *volumes;
   int volume_count;
   TextureGPU *textures;

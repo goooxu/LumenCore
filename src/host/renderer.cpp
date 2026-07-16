@@ -575,6 +575,11 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     d_lights.upload(scene.lights);
   }
 
+  CudaBuffer<SpotLight> d_spots;
+  if (!scene.spot_lights.empty()) {
+    d_spots.upload(scene.spot_lights);
+  }
+
   CudaBuffer<FlameVolume> d_volumes;
   if (!scene.volumes.empty()) {
     d_volumes.upload(scene.volumes);
@@ -613,6 +618,8 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   lp.material_count = static_cast<int>(materials_gpu.size());
   lp.lights = d_lights.ptr;
   lp.light_count = static_cast<int>(scene.lights.size());
+  lp.spots = d_spots.ptr;
+  lp.spot_count = static_cast<int>(scene.spot_lights.size());
   lp.volumes = d_volumes.ptr;
   lp.volume_count = static_cast<int>(scene.volumes.size());
   lp.textures = d_textures.ptr;

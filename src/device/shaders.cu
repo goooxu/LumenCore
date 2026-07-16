@@ -513,26 +513,50 @@ extern "C" __global__ void __closesthit__radiance() {
 
   prd->radiance += prd->throughput * mat.emission;
 
-  // Next event estimation toward quad lights
-  if (params.enable_nee && params.light_count > 0 && mat.transmission < 0.5f &&
+  // Next event estimation toward quad / spot lights
+  const int total_lights = params.light_count + params.spot_count;
+  if (params.enable_nee && total_lights > 0 && mat.transmission < 0.5f &&
       mat.metallic < 0.9f && nrtx::luminance(mat.emission) < 1e-6f) {
-    const int light_idx = static_cast<int>(nrtx::rnd(prd->seed) * params.light_count) %
-                          params.light_count;
-    const nrtx::QuadLight &light = params.lights[light_idx];
-    float3 lpos, lnormal;
-    float pdf_area;
-    const float3 Le = sample_quad_light(light, prd->seed, lpos, lnormal, pdf_area);
-    float3 to_light = lpos - p;
-    const float dist2 = nrtx::dot(to_light, to_light);
-    const float dist = sqrtf(dist2);
-    to_light = to_light / dist;
-    const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
-    const float cos_surf = nrtx::dot(n, to_light);
-    if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
-      if (!trace_shadow(p, to_light, dist)) {
-        const float pdf = pdf_area * dist2 / (cos_light * params.light_count);
-        const float3 brdf = base * (1.0f - mat.metallic) * (1.0f / 3.14159265f);
-        prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
+    const int light_idx =
+        static_cast<int>(nrtx::rnd(prd->seed) * total_lights) % total_lights;
+    const float3 brdf = base * (1.0f - mat.metallic) * (1.0f / 3.14159265f);
+
+    if (light_idx < params.light_count) {
+      const nrtx::QuadLight &light = params.lights[light_idx];
+      float3 lpos, lnormal;
+      float pdf_area;
+      const float3 Le = sample_quad_light(light, prd->seed, lpos, lnormal, pdf_area);
+      float3 to_light = lpos - p;
+      const float dist2 = nrtx::dot(to_light, to_light);
+      const float dist = sqrtf(dist2);
+      to_light = to_light / dist;
+      const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
+      const float cos_surf = nrtx::dot(n, to_light);
+      if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
+        if (!trace_shadow(p, to_light, dist)) {
+          const float pdf = pdf_area * dist2 / (cos_light * total_lights);
+          prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
+        }
+      }
+    } else {
+      const nrtx::SpotLight &spot = params.spots[light_idx - params.light_count];
+      float3 to_light = spot.position - p;
+      const float dist2 = nrtx::dot(to_light, to_light);
+      const float dist = sqrtf(dist2);
+      if (dist > 1e-4f) {
+        to_light = to_light / dist;
+        const float cos_surf = nrtx::dot(n, to_light);
+        // Spot aims along direction; surface sees light from -to_light relative to aim.
+        const float cos_aim = nrtx::dot(-to_light, spot.direction);
+        if (cos_surf > 0.0f && cos_aim > spot.cos_outer) {
+          const float cone = smoothstep(spot.cos_outer, spot.cos_inner, cos_aim);
+          if (cone > 0.0f && !trace_shadow(p, to_light, dist)) {
+            // Point light: pdf = 1 / total_lights (discrete choice only)
+            const float pdf = 1.0f / static_cast<float>(total_lights);
+            const float3 Le = spot.emission * (cone / dist2);
+            prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
+          }
+        }
       }
     }
   }

@@ -171,6 +171,15 @@ PYBIND11_MODULE(lumencore, m) {
           },
           py::arg("corner"), py::arg("u"), py::arg("v"), py::arg("emission"))
       .def(
+          "add_spot_light",
+          [](Scene &s, const py::object &position, const py::object &direction,
+             const py::object &emission, float angle_deg, float penumbra_deg) {
+            s.add_spot_light(to_float3(position), to_float3(direction), to_float3(emission),
+                             angle_deg, penumbra_deg);
+          },
+          py::arg("position"), py::arg("direction"), py::arg("emission"),
+          py::arg("angle_deg") = 18.0f, py::arg("penumbra_deg") = 10.0f)
+      .def(
           "add_flame_volume",
           [](Scene &s, const py::object &center, const py::object &half_extents,
              const py::object &emission_scale, float density_scale, float absorption,

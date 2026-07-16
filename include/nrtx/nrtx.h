@@ -51,6 +51,7 @@ struct Scene {
   std::vector<Material> materials;
   std::vector<Texture2D> textures;
   std::vector<QuadLight> lights;
+  std::vector<SpotLight> spot_lights;
   std::vector<FlameVolume> volumes;
   float3 background_top = make_float3(0.6f, 0.7f, 0.9f);
   float3 background_bottom = make_float3(0.15f, 0.15f, 0.2f);
@@ -75,6 +76,21 @@ struct Scene {
     light.inv_area = area > 0.0f ? 1.0f / area : 0.0f;
     light.pad = 0;
     lights.push_back(light);
+  }
+
+  void add_spot_light(const float3 &position, const float3 &direction, const float3 &emission,
+                      float angle_deg = 18.0f, float penumbra_deg = 10.0f) {
+    SpotLight light;
+    light.position = position;
+    light.direction = normalize(direction);
+    light.emission = emission;
+    const float deg2rad = 3.14159265f / 180.0f;
+    const float inner = fmaxf(0.0f, angle_deg) * deg2rad;
+    const float outer = fmaxf(inner, (angle_deg + fmaxf(0.0f, penumbra_deg)) * deg2rad);
+    light.cos_inner = cosf(inner);
+    light.cos_outer = cosf(outer);
+    light.pad = 0.0f;
+    spot_lights.push_back(light);
   }
 
   int add_flame_volume(const float3 &center, const float3 &half_extents,

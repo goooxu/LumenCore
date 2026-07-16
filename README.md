@@ -40,7 +40,7 @@ Open ground scene with chrome and glass props, soft sunlight, and a gradient env
 
 ![Sparky](outputs/sparky.png)
 
-Studio duo: **Sparky** (boxy tread robot with glass visor, pixel face, and **SPARKY** chest label) beside **Capsule Mascot** (warm yellow capsule character with visor, gloves/boots, and antenna — `assets/models/capsule_mascot.obj`, CC0). Shows multi-material OBJ loading for both characters in one frame.
+Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`, CC0).
 
 ---
 
@@ -49,11 +49,12 @@ Studio duo: **Sparky** (boxy tread robot with glass visor, pixel face, and **SPA
 - **PhysX 5 + OptiX 9** — simulate with PhysX, image with OptiX (`PhysXWorld` → poses → meshes → path tracer)
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
-- Unidirectional path tracing + Next Event Estimation (quad area lights)
+- Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights)
 - Russian Roulette; diffuse / metal / glass materials
 - Triangle-mesh GAS on OptiX RT Cores
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
+- Spot lights (`Scene.add_spot_light`)
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 

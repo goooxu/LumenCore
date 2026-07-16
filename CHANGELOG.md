@@ -11,6 +11,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - Mesh UV / texcoords, OBJ `vt` parsing, and albedo texture sampling in the path tracer
 - `Scene.add_texture`, `Material.albedo_tex`, bilinear GPU sampling in `closesthit`
+- `Scene.add_spot_light` (conical spot NEE) used for overhead key lights in the Sparky duo scene
 - Original **Sparky** cartoon robot (`scripts/gen_sparky.py` → `sparky.obj` + `sparky_albedo.png`) — boxy tread design with glass visor, multi-material plastics/metal/emissive screens, chest label **SPARKY**
 - **Capsule Mascot** asset (`capsule_mascot.obj`, CC0) co-starring with Sparky in `python/scenes/sparky.py`
 - Demo scene `python/scenes/sparky.py` and gallery render `outputs/sparky.png`

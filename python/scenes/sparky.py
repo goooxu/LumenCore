@@ -144,24 +144,31 @@ def main():
     scene.add_mesh(mascot)
     print("Loaded {}".format(mascot_path))
 
-    floor_mat = scene.add_material(lc.Material(base_color=(0.42, 0.42, 0.44), roughness=0.9))
-    wall = scene.add_material(lc.Material(base_color=(0.55, 0.56, 0.58), roughness=0.92))
+    floor_mat = scene.add_material(lc.Material(base_color=(0.38, 0.38, 0.40), roughness=0.92))
+    wall = scene.add_material(lc.Material(base_color=(0.48, 0.49, 0.52), roughness=0.94))
 
     scene.add_mesh(lc.make_quad((-5, 0, -5), (10, 0, 0), (0, 0, 10), floor_mat))
     scene.add_mesh(lc.make_quad((-5, 0, -2.6), (10, 0, 0), (0, 4.2, 0), wall))
 
-    light_corner = (-1.4, 3.6, -0.7)
-    light_u = (2.8, 0, 0)
-    light_v = (0, 0, 2.0)
-    # Mesh is a visible white panel only; illumination comes from NEE quad light.
-    light_mat = scene.add_material(
-        lc.Material(base_color=(0.95, 0.95, 0.95), roughness=1.0)
+    # Two overhead spotlights aimed at each lead (invisible; NEE only).
+    warm = (90.0, 82.0, 72.0)
+    scene.add_spot_light(
+        position=(-0.95, 3.2, 0.15),
+        direction=(0.05, -1.0, -0.08),
+        emission=warm,
+        angle_deg=18.0,
+        penumbra_deg=10.0,
     )
-    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (6.5, 6.2, 5.8))
+    scene.add_spot_light(
+        position=(0.85, 3.2, 0.1),
+        direction=(-0.05, -1.0, -0.06),
+        emission=warm,
+        angle_deg=18.0,
+        penumbra_deg=10.0,
+    )
 
-    scene.background_top = (0.45, 0.55, 0.72)
-    scene.background_bottom = (0.22, 0.23, 0.26)
+    scene.background_top = (0.28, 0.34, 0.45)
+    scene.background_bottom = (0.12, 0.13, 0.15)
 
     camera = lc.Camera(
         eye=(0.15, 1.7, 4.6), lookat=(0.0, 1.0, 0.0), fov_y_deg=36, aspect=16 / 9
