@@ -75,7 +75,6 @@ def main() -> int:
     out_arg = Path(sys.argv[1] if len(sys.argv) > 1 else "outputs/physx_collapse")
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 128
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
-    prefer_gpu = (int(sys.argv[4]) != 0) if len(sys.argv) > 4 else True
 
     if out_arg.suffix.lower() == ".png":
         hero_path = out_arg
@@ -87,7 +86,7 @@ def main() -> int:
     hero_path.parent.mkdir(parents=True, exist_ok=True)
 
     world = lc.PhysXWorld()
-    world.init(prefer_gpu)
+    world.init()
     print(f"[physx_collapse] PhysX backend: {world.backend()}", flush=True)
 
     actors: list[dict] = []

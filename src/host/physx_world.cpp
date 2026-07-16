@@ -114,7 +114,7 @@ PhysXWorld::PhysXWorld() : impl_(std::make_unique<Impl>()) {}
 
 PhysXWorld::~PhysXWorld() = default;
 
-void PhysXWorld::init(bool prefer_gpu) {
+void PhysXWorld::init() {
   impl_->shutdown();
 
   impl_->foundation = PxCreateFoundation(PX_PHYSICS_VERSION, impl_->allocator, impl_->error_callback);
@@ -127,13 +127,17 @@ void PhysXWorld::init(bool prefer_gpu) {
     throw std::runtime_error("PxCreatePhysics failed");
   }
 
-  if (prefer_gpu) {
-    PxCudaContextManagerDesc cuda_desc;
-    impl_->cuda_manager = PxCreateCudaContextManager(*impl_->foundation, cuda_desc, PxGetProfilerCallback());
-    if (impl_->cuda_manager && !impl_->cuda_manager->contextIsValid()) {
-      impl_->cuda_manager->release();
-      impl_->cuda_manager = nullptr;
-    }
+  PxCudaContextManagerDesc cuda_desc;
+  impl_->cuda_manager = PxCreateCudaContextManager(*impl_->foundation, cuda_desc, PxGetProfilerCallback());
+  if (impl_->cuda_manager && !impl_->cuda_manager->contextIsValid()) {
+    impl_->cuda_manager->release();
+    impl_->cuda_manager = nullptr;
+  }
+  if (!impl_->cuda_manager) {
+    throw std::runtime_error(
+        "PhysX GPU init failed: could not create a valid CUDA context manager. "
+        "Ensure third_party/physx/bin/libPhysXGpu_64.so is on LD_LIBRARY_PATH "
+        "(docker/run.sh sets this) and an NVIDIA GPU is available.");
   }
 
   PxSceneDesc scene_desc(impl_->physics->getTolerancesScale());
@@ -144,16 +148,12 @@ void PhysXWorld::init(bool prefer_gpu) {
   }
   scene_desc.cpuDispatcher = impl_->dispatcher;
   scene_desc.filterShader = PxDefaultSimulationFilterShader;
-
-  const bool can_gpu = prefer_gpu && impl_->cuda_manager != nullptr;
-  if (can_gpu) {
-    scene_desc.cudaContextManager = impl_->cuda_manager;
-    scene_desc.flags |= PxSceneFlag::eENABLE_GPU_DYNAMICS;
-    scene_desc.flags |= PxSceneFlag::eENABLE_PCM;
-    scene_desc.flags |= PxSceneFlag::eENABLE_STABILIZATION;
-    scene_desc.broadPhaseType = PxBroadPhaseType::eGPU;
-    scene_desc.gpuMaxNumPartitions = 8;
-  }
+  scene_desc.cudaContextManager = impl_->cuda_manager;
+  scene_desc.flags |= PxSceneFlag::eENABLE_GPU_DYNAMICS;
+  scene_desc.flags |= PxSceneFlag::eENABLE_PCM;
+  scene_desc.flags |= PxSceneFlag::eENABLE_STABILIZATION;
+  scene_desc.broadPhaseType = PxBroadPhaseType::eGPU;
+  scene_desc.gpuMaxNumPartitions = 8;
 
   impl_->scene = impl_->physics->createScene(scene_desc);
   if (!impl_->scene) {
@@ -165,8 +165,8 @@ void PhysXWorld::init(bool prefer_gpu) {
     throw std::runtime_error("PxPhysics::createMaterial failed");
   }
 
-  impl_->gpu = can_gpu;
-  impl_->backend = can_gpu ? "gpu" : "cpu";
+  impl_->gpu = true;
+  impl_->backend = "gpu";
   impl_->initialized = true;
 }
 

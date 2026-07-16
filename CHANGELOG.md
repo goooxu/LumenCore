@@ -5,6 +5,13 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-07-16
+
+### Changed
+
+- **PhysX is GPU-only**: `PhysXWorld.init()` no longer falls back to CPU; missing `libPhysXGpu` / CUDA context makes init throw
+- Removed `prefer_gpu` argument from C++/Python `PhysXWorld.init` and from `physx_collapse` CLI
+
 ## [0.8.0] - 2026-07-16
 
 ### Added
@@ -105,6 +112,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
 - Docker-based build/run helper for RTX GPUs
 
+[0.8.1]: https://github.com/goooxu/LumenCore/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/goooxu/LumenCore/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/goooxu/LumenCore/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/goooxu/LumenCore/compare/v0.5.0...v0.6.0

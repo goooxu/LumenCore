@@ -21,8 +21,8 @@ public:
   PhysXWorld(const PhysXWorld &) = delete;
   PhysXWorld &operator=(const PhysXWorld &) = delete;
 
-  // prefer_gpu: attempt GPU rigid bodies + GPU broadphase; falls back to CPU if unavailable.
-  void init(bool prefer_gpu = true);
+  // GPU-only rigid bodies + GPU broadphase. Throws if PhysXGpu / CUDA context is unavailable.
+  void init();
 
   bool using_gpu() const;
   const std::string &backend() const;

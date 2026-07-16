@@ -16,7 +16,7 @@ Dark stone hearth lit almost entirely by a **procedural flame volume** (noise de
 
 ![PhysX Collapse](outputs/physx_collapse.png)
 
-Studio brick tower knocked over by heavy metal balls rolling down a ramp. **PhysX** advances GPU (or CPU-fallback) rigid bodies; each sampled frame rebuilds triangle meshes from actor poses and is path-traced with **OptiX**. Frame sequence: `outputs/physx_collapse/`; contact sheet: `outputs/physx_collapse/contact_sheet.png`.
+Studio brick tower knocked over by heavy metal balls rolling down a ramp. **PhysX** advances GPU rigid bodies; each sampled frame rebuilds triangle meshes from actor poses and is path-traced with **OptiX**. Frame sequence: `outputs/physx_collapse/`; contact sheet: `outputs/physx_collapse/contact_sheet.png`.
 
 ### Cornell Box
 
@@ -52,7 +52,7 @@ Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1
 
 ## Features
 
-- **PhysX 5 + OptiX 9** — simulate with PhysX, image with OptiX (`PhysXWorld` → poses → meshes → path tracer)
+- **PhysX 5 + OptiX 9** — GPU PhysX rigid bodies (required) + OptiX path tracing (`PhysXWorld` → poses → meshes → path tracer)
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
 - Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights)
@@ -72,7 +72,7 @@ Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1
 - Docker with CUDA 13+ toolkit (default base: `nvidia/cuda:13.0.1-devel-ubuntu24.04`; `docker/run.sh` builds `lumencore-build:cuda13` with Python headers)
 - OptiX denoiser weights at `/usr/share/nvidia/nvoptix.bin`
 - Vendored OptiX 9 headers under `third_party/optix`
-- PhysX 5 static libs under `third_party/physx/lib` (run `scripts/setup_physx.sh` once; needs network on first fetch). GPU rigid bodies also need `third_party/physx/bin/libPhysXGpu_64.so` on `LD_LIBRARY_PATH` (`docker/run.sh` sets this). If GPU PhysX is unavailable, the demo falls back to CPU.
+- PhysX 5 static libs under `third_party/physx/lib` (run `scripts/setup_physx.sh` once; needs network on first fetch). GPU rigid bodies require `third_party/physx/bin/libPhysXGpu_64.so` on `LD_LIBRARY_PATH` (`docker/run.sh` sets this). PhysX is GPU-only; init fails if GPU PhysX is unavailable.
 - Network on first CMake configure (FetchContent downloads pybind11)
 
 ## Quick start
@@ -98,7 +98,7 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 
 CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
 
-`physx_collapse` extra arg: `[prefer_gpu=1|0]` — writes a frame sequence under `<out_stem>/` plus a gallery hero PNG.
+`physx_collapse` writes a frame sequence under `<out_stem>/` plus a gallery hero PNG.
 
 `fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
 

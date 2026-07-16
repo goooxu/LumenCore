@@ -299,7 +299,7 @@ PYBIND11_MODULE(lumencore, m) {
 
   py::class_<PhysXWorld>(m, "PhysXWorld")
       .def(py::init<>())
-      .def("init", &PhysXWorld::init, py::arg("prefer_gpu") = true)
+      .def("init", &PhysXWorld::init)
       .def("using_gpu", &PhysXWorld::using_gpu)
       .def("backend", &PhysXWorld::backend)
       .def(
