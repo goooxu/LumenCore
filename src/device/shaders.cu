@@ -784,8 +784,8 @@ extern "C" __global__ void __anyhit__shadow() {
   const int mat_id = hit_data->material_ids[prim_idx];
   if (mat_id >= 0 && mat_id < params.material_count) {
     const nrtx::MaterialGPU mat = params.materials[mat_id];
-    // Flame proxy boxes are transparent to shadow rays (illumination uses NEE proxy lights).
-    if (mat.flags & nrtx::MATERIAL_FLAG_VOLUME_FLAME) {
+    // Flame proxies and glass are transparent to shadow rays (NEE / proxy lights).
+    if ((mat.flags & nrtx::MATERIAL_FLAG_VOLUME_FLAME) || mat.transmission > 0.5f) {
       optixIgnoreIntersection();
       return;
     }

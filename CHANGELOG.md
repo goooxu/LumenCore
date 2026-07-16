@@ -9,8 +9,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
-- PhysX Collapse: larger **self-emissive** metal balls, darker studio lighting, and brick-sized **Sparky / Capsule Mascot** mixed into the tower
-- PhysX Collapse gallery keeps only two representative frames (`before.png`, `after.png`) plus the hero PNG
+- PhysX Collapse: larger **glass fireball** (procedural flame volume inside), darker studio lighting, and brick-sized **Sparky / Capsule Mascot** mixed into the tower
 
 ## [0.10.0] - 2026-07-16
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PhysX + OptiX dual-stack demo: brick tower collapse after glowing metal ball impact."""
+"""PhysX + OptiX dual-stack demo: brick tower collapse after a glass fireball impact."""
 from __future__ import annotations
 
 import math
@@ -160,24 +160,27 @@ def ensure_mascot_templates(scene: lc.Scene, target_h: float) -> dict[str, lc.Me
 
 
 def build_render_scene(
-    world: lc.PhysXWorld, actors: list[dict], brick_half: tuple[float, float, float]
+    world: lc.PhysXWorld,
+    actors: list[dict],
+    brick_half: tuple[float, float, float],
+    flame_time: float = 0.0,
 ) -> lc.Scene:
     scene = lc.Scene()
     mat_ids = {
         "floor": scene.add_material(lc.Material(base_color=(0.28, 0.28, 0.30), roughness=0.88)),
         "ramp": scene.add_material(lc.Material(base_color=(0.24, 0.25, 0.27), roughness=0.75)),
         "wall": scene.add_material(lc.Material(base_color=(0.32, 0.32, 0.34), roughness=0.85)),
-        # Warm self-emissive metal — primary visual focus in the dark studio.
-        "metal_glow": scene.add_material(
+        "glass": scene.add_material(
             lc.Material(
-                base_color=(0.95, 0.85, 0.55),
-                metallic=1.0,
-                roughness=0.15,
-                emission=(14.0, 10.0, 3.5),
+                base_color=(0.92, 0.97, 1.0),
+                roughness=0.0,
+                transmission=1.0,
+                ior=1.5,
+                absorption=(0.08, 0.04, 0.02),
             )
         ),
         "light": scene.add_material(
-            lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(3.5, 3.2, 2.8))
+            lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(2.2, 2.0, 1.8))
         ),
     }
     brick_cache: dict[tuple[float, float, float], int] = {}
@@ -202,19 +205,31 @@ def build_render_scene(
         elif kind == "mascot":
             scene.add_mesh(lc.apply_pose_to_mesh(templates[entry["which"]], pose))
         elif kind == "sphere":
+            radius = float(entry["radius"])
             scene.add_mesh(
-                lc.apply_pose_to_sphere_mesh(
-                    entry["radius"], pose, mat_ids["metal_glow"], 40, 20
-                )
+                lc.apply_pose_to_sphere_mesh(radius, pose, mat_ids["glass"], 48, 24)
+            )
+            # Flame AABB inscribed in the glass sphere (slightly taller for tongue look).
+            he = radius * 0.52
+            cx, cy, cz = pose.position
+            scene.add_flame_volume(
+                center=(cx, cy, cz),
+                half_extents=(he * 0.85, he * 1.05, he * 0.85),
+                emission_scale=(280.0, 110.0, 16.0),
+                density_scale=3.2,
+                absorption=2.4,
+                noise_scale=3.0,
+                time=flame_time,
+                add_proxy_light=True,
             )
 
-    # Dim fill lights — glowing balls carry the look.
+    # Dim fill — the fireball is the key light.
     scene.add_mesh(lc.make_quad((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), mat_ids["light"]))
-    scene.add_quad_light((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), (3.5, 3.2, 2.8))
-    scene.add_quad_light((4.0, 5.0, -3.0), (0.0, 0, 2.0), (0, -2.0, 0), (1.2, 1.3, 1.6))
+    scene.add_quad_light((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), (2.2, 2.0, 1.8))
+    scene.add_quad_light((4.0, 5.0, -3.0), (0.0, 0, 2.0), (0, -2.0, 0), (0.8, 0.85, 1.0))
 
-    scene.background_top = (0.12, 0.14, 0.18)
-    scene.background_bottom = (0.04, 0.04, 0.05)
+    scene.background_top = (0.10, 0.11, 0.14)
+    scene.background_bottom = (0.03, 0.03, 0.04)
     return scene
 
 
@@ -306,14 +321,13 @@ def main() -> int:
                     )
     print(f"[physx_collapse] mascots in tower: {mascot_count}", flush=True)
 
+    # Single heavy glass fireball rolling down the ramp.
     ball_r = 0.75
-    for pos, vel in [
-        ((-6.6, 3.75, 0.15), (2.8, -0.2, 0.0)),
-        ((-6.9, 3.95, -0.35), (2.5, -0.1, 0.4)),
-    ]:
-        aid = world.add_dynamic_sphere(ball_r, 18.0, lc.Pose(position=pos))
-        world.set_linear_velocity(aid, vel)
-        actors.append({"id": aid, "kind": "sphere", "radius": ball_r})
+    ball_pos = (-6.6, 3.75, 0.0)
+    ball_vel = (2.9, -0.15, 0.0)
+    aid = world.add_dynamic_sphere(ball_r, 14.0, lc.Pose(position=ball_pos))
+    world.set_linear_velocity(aid, ball_vel)
+    actors.append({"id": aid, "kind": "sphere", "radius": ball_r})
 
     camera = lc.Camera(
         eye=(8.2, 4.6, 10.2),
@@ -324,24 +338,18 @@ def main() -> int:
     )
 
     sim_steps = 180
-    # Gallery keeps only two named frames; hero is a separate copy of an impact beat.
-    save_steps = {
-        0: "before.png",  # intact tower + glowing balls on ramp
-        120: "after.png",  # mid-collapse, ball still readable
-    }
-    hero_step = 60
-    render_steps = set(save_steps) | {hero_step}
+    frame_every = 15
+    hero_step = 60  # default homepage candidate; replace outputs/physx_collapse.png after picking
     renderer = lc.Renderer()
-    saved: list[Path] = []
+    frame_paths: list[Path] = []
 
     step_i = 0
+    frame_idx = 0
     while step_i <= sim_steps:
-        if step_i in render_steps:
-            scene = build_render_scene(world, actors, brick_half)
-            if step_i in save_steps:
-                out_png = frames_dir / save_steps[step_i]
-            else:
-                out_png = frames_dir / "_hero_tmp.png"
+        if step_i % frame_every == 0:
+            flame_time = 1.2 + step_i * 0.035
+            scene = build_render_scene(world, actors, brick_half, flame_time=flame_time)
+            out_png = frames_dir / f"frame_{frame_idx:04d}.png"
             cfg = lc.RenderConfig(
                 width=2560,
                 height=1440,
@@ -350,27 +358,52 @@ def main() -> int:
                 output_path=str(out_png),
             )
             print(
-                f"[physx_collapse] render @ sim step {step_i} → {out_png}",
+                f"[physx_collapse] render frame {frame_idx} @ sim step {step_i} → {out_png}",
                 flush=True,
             )
             renderer.render(scene, camera, cfg)
-            if step_i in save_steps:
-                saved.append(out_png)
+            frame_paths.append(out_png)
             if step_i == hero_step:
                 shutil.copyfile(out_png, hero_path)
                 print(f"[physx_collapse] hero image → {hero_path}", flush=True)
-                if step_i not in save_steps:
-                    out_png.unlink(missing_ok=True)
+            frame_idx += 1
 
         if step_i == sim_steps:
             break
         world.step(1.0 / 60.0, 1)
         step_i += 1
 
-    print(
-        f"[physx_collapse] done. gallery={[p.name for p in saved]} backend={world.backend()}",
-        flush=True,
-    )
+    # Build contact sheet in a child process so a PIL crash cannot kill the demo.
+    sheet_path = frames_dir / "contact_sheet.png"
+    try:
+        import subprocess
+
+        picks = frame_paths[:: max(1, len(frame_paths) // 6)][:6]
+        if picks:
+            script = (
+                "from PIL import Image\n"
+                "from pathlib import Path\n"
+                f"paths = {[str(p) for p in picks]!r}\n"
+                f"out = {str(sheet_path)!r}\n"
+                "imgs = [Image.open(p) for p in paths]\n"
+                "w, h = imgs[0].size\n"
+                "sheet = Image.new('RGB', (w * len(imgs), h))\n"
+                "for i, im in enumerate(imgs):\n"
+                "    sheet.paste(im, (i * w, 0))\n"
+                "sheet.save(out)\n"
+            )
+            rc = subprocess.run(
+                [sys.executable, "-c", script],
+                check=False,
+            ).returncode
+            if rc == 0 and sheet_path.is_file():
+                print(f"[physx_collapse] contact sheet → {sheet_path}", flush=True)
+            else:
+                print(f"[physx_collapse] contact sheet skipped (exit {rc})", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[physx_collapse] contact sheet skipped ({exc})", flush=True)
+
+    print(f"[physx_collapse] done. frames={len(frame_paths)} backend={world.backend()}", flush=True)
     return 0
 
 
