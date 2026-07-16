@@ -73,15 +73,23 @@ def main() -> int:
     scene.add_mesh(lc.make_box((0.34, 0.18, -1.40), (0.40, 0.42, -1.34), metal))
 
     # Procedural volumetric flame (primary look) + auto NEE proxy light
+    # Tall narrow flame that sits above the logs (not a box filling the firebox)
     scene.add_flame_volume(
-        center=(0.0, 0.55, -1.55),
-        half_extents=(0.34, 0.58, 0.24),
-        emission_scale=(55.0, 22.0, 3.5),
-        density_scale=2.4,
-        absorption=2.8,
-        noise_scale=2.6,
+        center=(0.0, 0.58, -1.55),
+        half_extents=(0.28, 0.48, 0.18),
+        emission_scale=(180.0, 70.0, 12.0),
+        density_scale=2.8,
+        absorption=1.5,
+        noise_scale=2.5,
         time=time,
         add_proxy_light=True,
+    )
+    # Warm fill so the room reads clearly under the fire key
+    scene.add_quad_light(
+        (-0.28, 0.45, -1.28),
+        (0.56, 0.0, 0.0),
+        (0.0, 0.35, 0.0),
+        (90.0, 36.0, 6.0),
     )
 
     # Nearly black environment — fire is the key light

@@ -68,8 +68,8 @@ struct Scene {
 
   // Procedural flame volume: proxy AABB mesh + optional NEE face light at the fire core.
   int add_flame_volume(const float3 &center, const float3 &half_extents,
-                       const float3 &emission_scale = make_float3(28.0f, 12.0f, 2.5f),
-                       float density_scale = 1.8f, float absorption = 3.5f,
+                       const float3 &emission_scale = make_float3(120.0f, 48.0f, 8.0f),
+                       float density_scale = 2.8f, float absorption = 2.0f,
                        float noise_scale = 2.4f, float time = 0.0f, bool add_proxy_light = true);
 };
 

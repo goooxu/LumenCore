@@ -149,40 +149,74 @@ __forceinline__ __device__ bool intersect_aabb(const float3 &ro, const float3 &r
   return t_far > t_near;
 }
 
+__forceinline__ __device__ float smoothstep(float edge0, float edge1, float x) {
+  const float t = nrtx::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
+
 __forceinline__ __device__ float3 flame_emission_color(float height01, float density) {
-  // height: 0 base → 1 tip; denser cores run hotter (whiter)
-  const float hot = nrtx::clamp(density * 1.4f, 0.0f, 1.0f);
-  const float3 tip = make_float3(1.0f, 0.25f, 0.04f);
-  const float3 mid = make_float3(1.0f, 0.55f, 0.08f);
-  const float3 core = make_float3(1.0f, 0.92f, 0.55f);
-  float3 c = nrtx::lerp(tip, mid, nrtx::clamp(1.0f - height01 * 1.2f, 0.0f, 1.0f));
-  c = nrtx::lerp(c, core, hot * (1.0f - height01));
+  // Broader yellow-white core near the base; orange mid; soft red-orange tip.
+  const float core_w = (1.0f - height01) * (1.0f - height01);
+  const float hot = nrtx::clamp(density * 1.1f + 0.25f * core_w, 0.0f, 1.0f);
+  const float3 tip = make_float3(1.0f, 0.22f, 0.03f);
+  const float3 mid = make_float3(1.0f, 0.52f, 0.06f);
+  const float3 core = make_float3(1.05f, 0.95f, 0.65f);
+  float3 c = nrtx::lerp(tip, mid, smoothstep(0.15f, 0.75f, 1.0f - height01));
+  c = nrtx::lerp(c, core, hot * smoothstep(0.35f, 0.0f, height01));
   return c;
 }
 
 __forceinline__ __device__ float flame_density(const nrtx::FlameVolume &vol, const float3 &p) {
-  const float3 d = p - vol.center;
-  const float3 local =
-      make_float3(d.x / vol.half_extents.x, d.y / vol.half_extents.y, d.z / vol.half_extents.z);
-  // Vertical teardrop envelope
-  const float h = nrtx::clamp(0.5f * (local.y + 1.0f), 0.0f, 1.0f); // 0 base → 1 tip
-  const float radius = 0.55f * (1.0f - h * 0.85f);
-  const float r2 = local.x * local.x + local.z * local.z;
-  if (r2 > radius * radius * 1.35f || local.y < -1.05f || local.y > 1.05f) {
+  // Local: y in [-1,1] bottom→top.
+  float3 q = make_float3((p.x - vol.center.x) / vol.half_extents.x,
+                         (p.y - vol.center.y) / vol.half_extents.y,
+                         (p.z - vol.center.z) / vol.half_extents.z);
+  if (q.y < -1.15f || q.y > 1.2f) {
     return 0.0f;
   }
-  const float radial = 1.0f - sqrtf(r2) / fmaxf(radius, 1e-3f);
-  const float height_falloff = powf(1.0f - h, 0.65f);
 
-  // Upward-scrolling domain warping
-  const float3 q =
-      make_float3(p.x, p.y - vol.time * 1.35f, p.z) * vol.noise_scale + make_float3(0.0f, vol.time * 0.4f, 0.0f);
-  float n = fbm(q);
-  n = nrtx::clamp((n - 0.28f) * 1.9f, 0.0f, 1.0f);
+  const float t = vol.time;
+  const float y01 = nrtx::clamp(0.5f * (q.y + 1.0f), 0.0f, 1.0f);
 
-  // Side flicker
-  const float wobble = 0.65f + 0.35f * value_noise(make_float3(p.x * 3.0f + vol.time, p.y * 0.5f, p.z * 3.0f));
-  return vol.density_scale * radial * height_falloff * n * wobble;
+  float3 sp = make_float3(q.x * vol.noise_scale, (q.y - t * 1.8f) * vol.noise_scale,
+                          q.z * vol.noise_scale);
+  const float w1 = fbm(sp * 0.9f + make_float3(t * 0.15f, 0.0f, -t * 0.1f));
+  const float w2 = fbm(sp * 1.7f + make_float3(2.7f, t * 0.2f, 1.3f));
+  // Stronger lateral sway so the plume leans and forks
+  q.x += (w1 - 0.5f) * 0.85f * (0.15f + 1.2f * y01);
+  q.z += (w2 - 0.5f) * 0.75f * (0.15f + 1.1f * y01);
+  q.x += 0.18f * sinf(t * 2.4f + y01 * 3.0f) * y01;
+
+  const float r = sqrtf(q.x * q.x + q.z * q.z);
+  const float ang = atan2f(q.z, q.x);
+
+  // Fire profile: fat base, tapering tongues, angular gusts, chewed edges.
+  float profile = 0.5f * powf(1.0f - y01, 0.75f);
+  profile *= 1.0f + 0.55f * sinf(ang * 2.0f + t * 3.1f + y01 * 6.0f) * y01;
+  profile *= 1.0f + 0.4f * sinf(ang * 3.0f - t * 2.2f + 1.1f) * (0.15f + y01);
+  profile *= 1.0f + 0.25f * sinf(ang * 5.0f + t * 4.0f) * y01;
+  const float edge = fbm(make_float3(cosf(ang) * 3.0f, y01 * 5.5f - t * 2.6f, sinf(ang) * 3.0f));
+  profile *= 0.35f + 1.35f * edge;
+  profile = fmaxf(profile, 0.015f);
+
+  float mask = 1.0f - smoothstep(profile * 0.05f, profile * 0.9f, r);
+  mask = powf(fmaxf(mask, 0.0f), 1.25f);
+
+  const float tip = 1.0f - smoothstep(0.5f, 1.08f, y01 + 0.45f * (edge - 0.5f));
+  const float bed = smoothstep(-1.1f, -0.5f, q.y) * (1.0f - smoothstep(0.0f, 0.4f, y01));
+
+  float turb = fbm(sp * 1.55f + make_float3(q.x * 2.5f, 0.0f, q.z * 2.5f));
+  // High contrast so tongues survive OptiX denoiser
+  turb = smoothstep(0.28f, 0.62f, turb);
+  turb = powf(turb, 0.75f);
+
+  float dens = mask * tip * (0.15f + 1.2f * turb);
+  // Soft ember glow near the logs (avoid a hard bright disc)
+  dens = fmaxf(dens, bed * 0.45f * (1.0f - smoothstep(0.0f, 0.35f, r)) * turb);
+  // Extra wisps: subtract holes near the tip
+  const float holes = fbm(sp * 2.3f + make_float3(ang, y01 * 3.0f, t));
+  dens *= 1.0f - 0.55f * y01 * smoothstep(0.55f, 0.85f, holes);
+  return fmaxf(dens * vol.density_scale, 0.0f);
 }
 
 __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const nrtx::FlameVolume &vol,
@@ -204,7 +238,7 @@ __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const n
     return;
   }
 
-  constexpr int kSteps = 40;
+  constexpr int kSteps = 56;
   const float span = t_far - t_near;
   const float jitter = nrtx::rnd(prd->seed);
   const float dt = span / static_cast<float>(kSteps);
@@ -226,7 +260,9 @@ __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const n
     const float height01 =
         nrtx::clamp((p.y - (vol.center.y - vol.half_extents.y)) / fmaxf(2.0f * vol.half_extents.y, 1e-3f), 0.0f,
                     1.0f);
-    const float3 emit = flame_emission_color(height01, dens) * vol.emission_scale * dens;
+    // Partially decouple emission from density so the body stays bright, not only the core.
+    const float3 emit =
+        flame_emission_color(height01, dens) * vol.emission_scale * (0.55f + dens);
     Le += make_float3(Tr, Tr, Tr) * emit * dt;
     Tr *= expf(-sigma_t * dt);
     if (Tr < 1e-3f) {

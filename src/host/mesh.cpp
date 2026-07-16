@@ -134,11 +134,11 @@ int Scene::add_flame_volume(const float3 &center, const float3 &half_extents,
 
   if (add_proxy_light) {
     const float3 light_center = make_float3(center.x, center.y - half_extents.y * 0.15f, center.z);
-    const float3 u = make_float3(half_extents.x * 0.7f, 0.0f, 0.0f);
-    const float3 v = make_float3(0.0f, 0.0f, half_extents.z * 0.7f);
+    const float3 u = make_float3(half_extents.x * 0.95f, 0.0f, 0.0f);
+    const float3 v = make_float3(0.0f, 0.0f, half_extents.z * 0.95f);
     const float3 corner = light_center - u * 0.5f - v * 0.5f;
     const float flicker = 0.85f + 0.15f * std::sin(time * 7.3f);
-    const float3 proxy_emission = emission_scale * (1.15f * flicker);
+    const float3 proxy_emission = emission_scale * (4.5f * flicker);
     add_quad_light(corner, u, v, proxy_emission);
   }
   return volume_index;

@@ -176,8 +176,8 @@ PYBIND11_MODULE(lumencore, m) {
                                       noise_scale, time, add_proxy_light);
           },
           py::arg("center"), py::arg("half_extents"),
-          py::arg("emission_scale") = py::make_tuple(28.0f, 12.0f, 2.5f),
-          py::arg("density_scale") = 1.8f, py::arg("absorption") = 3.5f,
+          py::arg("emission_scale") = py::make_tuple(120.0f, 48.0f, 8.0f),
+          py::arg("density_scale") = 2.8f, py::arg("absorption") = 2.0f,
           py::arg("noise_scale") = 2.4f, py::arg("time") = 0.0f, py::arg("add_proxy_light") = true)
       .def_property(
           "background_top", [](const Scene &s) { return from_float3(s.background_top); },
