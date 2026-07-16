@@ -46,7 +46,7 @@ Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotligh
 
 ![Water Pool](outputs/water_pool.png)
 
-Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1.33 + Beer-Lambert absorption). Far-deck chrome and colored spheres show clear **reflections** at a grazing camera angle; a single submerged accent demonstrates refraction.
+Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1.33 + Beer-Lambert absorption). The near wall is open toward the camera so the water plane reads clearly; **Sparky** and **Capsule Mascot** stand on the far deck as reflection subjects, with a submerged accent for refraction.
 
 ---
 

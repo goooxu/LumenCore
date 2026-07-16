@@ -123,9 +123,9 @@ Mesh make_water_surface(const float3 &center, const float3 &half_extents_xz, flo
 
   auto wave_y = [&](float x, float z) {
     const float t = time;
-    return 0.045f * std::sin(2.3f * x + 1.1f * z + t * 1.7f) +
-           0.028f * std::sin(3.5f * z - 1.4f * x + t * 2.3f) +
-           0.016f * std::sin(5.2f * x + 4.1f * z - t * 1.1f);
+    return 0.085f * std::sin(2.3f * x + 1.1f * z + t * 1.7f) +
+           0.050f * std::sin(3.5f * z - 1.4f * x + t * 2.3f) +
+           0.028f * std::sin(5.2f * x + 4.1f * z - t * 1.1f);
   };
 
   for (int j = 0; j <= nz; ++j) {
