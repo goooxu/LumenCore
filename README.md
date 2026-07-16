@@ -36,11 +36,11 @@ Material chart of diffuse, metal, and glass spheres under an area light. Useful 
 
 Open ground scene with chrome and glass props, soft sunlight, and a gradient environment. Includes a light depth-of-field camera.
 
-### Sparky (textured robot)
+### Sparky + Capsule Mascot
 
 ![Sparky](outputs/sparky.png)
 
-Studio portrait of **Sparky**, an original boxy tread robot (~7k triangles): translucent glass visor with a glowing pixel face, blue/white chassis, chest screen labeled **SPARKY**, orange treads, and dual antenna tip lights. Built from `assets/models/sparky.obj` + albedo atlas; multi-material `usemtl` groups drive glass, plastics, metal, and emissive screens.
+Studio duo: **Sparky** (boxy tread robot with glass visor, pixel face, and **SPARKY** chest label) beside **Capsule Mascot** (warm yellow capsule character with visor, gloves/boots, and antenna — `assets/models/capsule_mascot.obj`, CC0). Shows multi-material OBJ loading for both characters in one frame.
 
 ---
 
@@ -132,10 +132,10 @@ lc.Renderer().render(scene, cam, cfg)
 | cornell | 2048×2048 | ~1.51 s @ 256 spp |
 | materials_ball | 2560×1440 | ~0.50 s @ 256 spp |
 | outdoor_env | 2560×1440 | ~0.43 s @ 256 spp |
-| sparky | 2560×1440 | ~0.85 s @ 256 spp (textured boxy robot) |
+| sparky | 2560×1440 | Sparky + Capsule Mascot duo |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
 | fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
 
 ## License
 
-Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). Sparky is an original asset bundled with this repository.
+Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). Sparky is an original asset bundled with this repository. Capsule Mascot is CC0-1.0.

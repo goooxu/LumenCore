@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sparky boxy tread robot scene for LumenCore."""
+"""Sparky + Capsule Mascot duo scene for LumenCore."""
 from __future__ import print_function
 
 import os
@@ -82,7 +82,7 @@ def main():
         )
     )
 
-    mtl_map = {
+    sparky_mtl = {
         "GlassHead": glass,
         "ScreenFace": screen_face,
         "ScreenChest": screen_chest,
@@ -95,40 +95,75 @@ def main():
         "EmitYellow": emit_yellow,
     }
 
-    obj_path = resolve_asset("assets/models/sparky.obj")
-    robot = lc.load_obj(obj_path, mtl_map, plastic_white)
-    robot = lc.transform_mesh(robot, (0, 0, 0), (1, 1, 1), (0, 0.45, 0))
-    scene.add_mesh(robot)
-    print("Loaded {} (albedo {})".format(obj_path, albedo_path))
+    # Capsule mascot materials
+    yellow = scene.add_material(lc.Material(base_color=(0.95, 0.82, 0.18), roughness=0.42))
+    visor = scene.add_material(
+        lc.Material(base_color=(0.22, 0.24, 0.28), metallic=0.75, roughness=0.22)
+    )
+    eye = scene.add_material(
+        lc.Material(base_color=(0.96, 0.96, 0.98), roughness=0.3, emission=(0.4, 0.4, 0.45))
+    )
+    belt = scene.add_material(lc.Material(base_color=(0.10, 0.18, 0.35), roughness=0.55))
+    leather = scene.add_material(lc.Material(base_color=(0.22, 0.12, 0.06), roughness=0.7))
+    ant_stem = scene.add_material(
+        lc.Material(base_color=(0.55, 0.57, 0.60), metallic=0.65, roughness=0.3)
+    )
+    ant_tip = scene.add_material(
+        lc.Material(base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(6.0, 4.5, 0.8))
+    )
+
+    mascot_mtl = {
+        "mascot_torso": yellow,
+        "mascot_arm_left": yellow,
+        "mascot_arm_right": yellow,
+        "mascot_leg_left": yellow,
+        "mascot_leg_right": yellow,
+        "mascot_visor": visor,
+        "mascot_eye_left": eye,
+        "mascot_eye_right": eye,
+        "mascot_belt_flange": belt,
+        "mascot_glove_left": leather,
+        "mascot_glove_right": leather,
+        "mascot_boot_left": leather,
+        "mascot_boot_right": leather,
+        "mascot_antenna_stem": ant_stem,
+        "mascot_antenna_tip": ant_tip,
+    }
+
+    # Sparky on the right
+    sparky_path = resolve_asset("assets/models/sparky.obj")
+    sparky = lc.load_obj(sparky_path, sparky_mtl, plastic_white)
+    sparky = lc.transform_mesh(sparky, (0.85, 0.0, 0.0), (1.0, 1.0, 1.0), (0.0, -0.35, 0.0))
+    scene.add_mesh(sparky)
+    print("Loaded {}".format(sparky_path))
+
+    # Capsule mascot on the left (source height ~2m, matches Sparky scale)
+    mascot_path = resolve_asset("assets/models/capsule_mascot.obj")
+    mascot = lc.load_obj(mascot_path, mascot_mtl, yellow)
+    mascot = lc.transform_mesh(mascot, (-0.95, 0.0, 0.05), (1.0, 1.0, 1.0), (0.0, 0.45, 0.0))
+    scene.add_mesh(mascot)
+    print("Loaded {}".format(mascot_path))
 
     floor_mat = scene.add_material(lc.Material(base_color=(0.78, 0.78, 0.80), roughness=0.88))
     wall = scene.add_material(lc.Material(base_color=(0.88, 0.90, 0.92), roughness=0.92))
-    chrome = scene.add_material(
-        lc.Material(base_color=(0.95, 0.95, 0.98), metallic=1.0, roughness=0.05)
-    )
-    prop_orange = scene.add_material(
-        lc.Material(base_color=(0.95, 0.42, 0.12), roughness=0.4)
-    )
 
-    scene.add_mesh(lc.make_quad((-4, 0, -4), (8, 0, 0), (0, 0, 8), floor_mat))
-    scene.add_mesh(lc.make_quad((-4, 0, -2.4), (8, 0, 0), (0, 4, 0), wall))
-    scene.add_mesh(lc.make_uv_sphere((-1.45, 0.32, 0.7), 0.32, chrome))
-    scene.add_mesh(lc.make_box((1.15, 0.0, 0.35), (1.75, 0.55, 0.95), prop_orange))
+    scene.add_mesh(lc.make_quad((-5, 0, -5), (10, 0, 0), (0, 0, 10), floor_mat))
+    scene.add_mesh(lc.make_quad((-5, 0, -2.6), (10, 0, 0), (0, 4.2, 0), wall))
 
-    light_corner = (-1.3, 3.5, -0.6)
-    light_u = (2.6, 0, 0)
-    light_v = (0, 0, 2.1)
+    light_corner = (-1.6, 3.7, -0.8)
+    light_u = (3.2, 0, 0)
+    light_v = (0, 0, 2.4)
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(16, 15.5, 14))
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(15, 14.5, 13.5))
     )
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (16, 15.5, 14))
+    scene.add_quad_light(light_corner, light_u, light_v, (15, 14.5, 13.5))
 
     scene.background_top = (0.62, 0.72, 0.88)
     scene.background_bottom = (0.40, 0.42, 0.46)
 
     camera = lc.Camera(
-        eye=(2.9, 1.55, 3.7), lookat=(0.0, 0.95, 0.05), fov_y_deg=34, aspect=16 / 9
+        eye=(0.15, 1.7, 4.6), lookat=(0.0, 1.0, 0.0), fov_y_deg=36, aspect=16 / 9
     )
     cfg = lc.RenderConfig(width=2560, height=1440, spp=spp, denoise=denoise, output_path=out)
     lc.Renderer().render(scene, camera, cfg)
