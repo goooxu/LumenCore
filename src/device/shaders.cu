@@ -155,67 +155,82 @@ __forceinline__ __device__ float smoothstep(float edge0, float edge1, float x) {
 }
 
 __forceinline__ __device__ float3 flame_emission_color(float height01, float density) {
-  // Broader yellow-white core near the base; orange mid; soft red-orange tip.
-  const float core_w = (1.0f - height01) * (1.0f - height01);
-  const float hot = nrtx::clamp(density * 1.1f + 0.25f * core_w, 0.0f, 1.0f);
-  const float3 tip = make_float3(1.0f, 0.22f, 0.03f);
-  const float3 mid = make_float3(1.0f, 0.52f, 0.06f);
-  const float3 core = make_float3(1.05f, 0.95f, 0.65f);
-  float3 c = nrtx::lerp(tip, mid, smoothstep(0.15f, 0.75f, 1.0f - height01));
-  c = nrtx::lerp(c, core, hot * smoothstep(0.35f, 0.0f, height01));
+  // Blackbody-ish palette from local temperature (0 cool tip → 1 hot core).
+  const float core_boost = (1.0f - height01) * (1.0f - height01);
+  const float temp =
+      nrtx::clamp(density * (1.25f - 0.95f * height01) + 0.35f * core_boost, 0.0f, 1.0f);
+  const float3 c_cool = make_float3(0.95f, 0.12f, 0.02f);
+  const float3 c_mid = make_float3(1.0f, 0.45f, 0.05f);
+  const float3 c_hot = make_float3(1.15f, 0.95f, 0.55f);
+  float3 c = nrtx::lerp(c_cool, c_mid, smoothstep(0.15f, 0.55f, temp));
+  c = nrtx::lerp(c, c_hot, smoothstep(0.45f, 0.95f, temp));
   return c;
 }
 
 __forceinline__ __device__ float flame_density(const nrtx::FlameVolume &vol, const float3 &p) {
-  // Local: y in [-1,1] bottom→top.
+  // Local coords: y in [-1,1] bottom → tip.
   float3 q = make_float3((p.x - vol.center.x) / vol.half_extents.x,
                          (p.y - vol.center.y) / vol.half_extents.y,
                          (p.z - vol.center.z) / vol.half_extents.z);
-  if (q.y < -1.15f || q.y > 1.2f) {
+  if (q.y < -1.12f || q.y > 1.15f) {
     return 0.0f;
   }
 
   const float t = vol.time;
   const float y01 = nrtx::clamp(0.5f * (q.y + 1.0f), 0.0f, 1.0f);
 
-  float3 sp = make_float3(q.x * vol.noise_scale, (q.y - t * 1.8f) * vol.noise_scale,
-                          q.z * vol.noise_scale);
-  const float w1 = fbm(sp * 0.9f + make_float3(t * 0.15f, 0.0f, -t * 0.1f));
-  const float w2 = fbm(sp * 1.7f + make_float3(2.7f, t * 0.2f, 1.3f));
-  // Stronger lateral sway so the plume leans and forks
-  q.x += (w1 - 0.5f) * 0.85f * (0.15f + 1.2f * y01);
-  q.z += (w2 - 0.5f) * 0.75f * (0.15f + 1.1f * y01);
-  q.x += 0.18f * sinf(t * 2.4f + y01 * 3.0f) * y01;
+  // Mild domain warp only (keep filaments readable).
+  float3 sp0 = make_float3(q.x * 1.6f, (q.y - t * 0.35f) * 1.2f, q.z * 1.6f);
+  q.x += (value_noise(sp0) - 0.5f) * 0.18f * (0.2f + y01);
+  q.z += (value_noise(sp0 + make_float3(3.1f, 1.7f, -2.4f)) - 0.5f) * 0.18f * (0.2f + y01);
 
-  const float r = sqrtf(q.x * q.x + q.z * q.z);
-  const float ang = atan2f(q.z, q.x);
+  // Rising anisotropic sample space: denser horizontally, stretched vertically.
+  const float ns = vol.noise_scale;
+  float3 sp = make_float3(q.x * ns * 1.85f, (q.y - t * 2.15f) * ns * 0.85f, q.z * ns * 1.85f);
 
-  // Fire profile: fat base, tapering tongues, angular gusts, chewed edges.
-  float profile = 0.5f * powf(1.0f - y01, 0.75f);
-  profile *= 1.0f + 0.55f * sinf(ang * 2.0f + t * 3.1f + y01 * 6.0f) * y01;
-  profile *= 1.0f + 0.4f * sinf(ang * 3.0f - t * 2.2f + 1.1f) * (0.15f + y01);
-  profile *= 1.0f + 0.25f * sinf(ang * 5.0f + t * 4.0f) * y01;
-  const float edge = fbm(make_float3(cosf(ang) * 3.0f, y01 * 5.5f - t * 2.6f, sinf(ang) * 3.0f));
-  profile *= 0.35f + 1.35f * edge;
-  profile = fmaxf(profile, 0.015f);
+  // 5 sparse filaments with independent swaying centers.
+  float filament = 0.0f;
+  for (int i = 0; i < 5; ++i) {
+    const float fi = static_cast<float>(i);
+    const float phase = t * (1.55f + 0.33f * fi) + fi * 1.7f;
+    const float sway = 0.12f + 0.55f * y01;
+    float ox = sway * sinf(phase) * (0.55f + 0.12f * fi);
+    float oz = sway * cosf(phase * 0.87f + 0.9f) * (0.5f + 0.1f * fi);
+    // Extra curl so tongues lean/fold instead of perfect vertical streaks
+    ox += 0.22f * (fbm(make_float3(q.y * 2.5f + fi, t * 0.6f, fi * 1.3f)) - 0.5f) * y01;
+    oz += 0.22f * (fbm(make_float3(fi * 2.1f, q.y * 2.2f - t * 0.7f, 4.0f)) - 0.5f) * y01;
+    const float lx = q.x - ox;
+    const float lz = q.z - oz;
+    // Tube width: wider near fuel bed, hair-thin at tip.
+    float width = (0.22f - 0.025f * fi) * (1.0f - y01) + 0.035f * y01;
+    width *= 0.85f + 0.3f * value_noise(make_float3(phase, y01 * 2.0f, fi));
+    const float r2 = lx * lx + lz * lz;
+    const float tube = expf(-r2 / fmaxf(width * width, 1e-5f));
+    filament = fmaxf(filament, tube * (1.0f - 0.08f * fi));
+  }
 
-  float mask = 1.0f - smoothstep(profile * 0.05f, profile * 0.9f, r);
-  mask = powf(fmaxf(mask, 0.0f), 1.25f);
+  // High-contrast carving along the rising column (most voxels empty).
+  float n = fbm(sp);
+  const float thresh = 0.38f + 0.42f * y01;
+  const float contrast = 4.5f + 3.0f * y01;
+  float carve = nrtx::clamp((n - thresh) * contrast, 0.0f, 1.0f);
+  carve = powf(carve, 1.15f);
 
-  const float tip = 1.0f - smoothstep(0.5f, 1.08f, y01 + 0.45f * (edge - 0.5f));
-  const float bed = smoothstep(-1.1f, -0.5f, q.y) * (1.0f - smoothstep(0.0f, 0.4f, y01));
+  const float base = smoothstep(-1.1f, -0.65f, q.y);
+  const float tip = 1.0f - smoothstep(0.55f, 1.05f, y01 + 0.25f * (n - 0.5f));
+  const float height_env = base * tip;
 
-  float turb = fbm(sp * 1.55f + make_float3(q.x * 2.5f, 0.0f, q.z * 2.5f));
-  // High contrast so tongues survive OptiX denoiser
-  turb = smoothstep(0.28f, 0.62f, turb);
-  turb = powf(turb, 0.75f);
+  float bed = 0.0f;
+  if (y01 < 0.35f) {
+    const float br = sqrtf(q.x * q.x + q.z * q.z);
+    bed = expf(-br * br / 0.12f) * (1.0f - y01 / 0.35f) * carve * 0.55f;
+  }
 
-  float dens = mask * tip * (0.15f + 1.2f * turb);
-  // Soft ember glow near the logs (avoid a hard bright disc)
-  dens = fmaxf(dens, bed * 0.45f * (1.0f - smoothstep(0.0f, 0.35f, r)) * turb);
-  // Extra wisps: subtract holes near the tip
-  const float holes = fbm(sp * 2.3f + make_float3(ang, y01 * 3.0f, t));
-  dens *= 1.0f - 0.55f * y01 * smoothstep(0.55f, 0.85f, holes);
+  float dens = filament * carve * height_env;
+  dens = fmaxf(dens, bed);
+  const float holes = fbm(sp * 1.8f + make_float3(2.2f, t, -1.4f));
+  dens *= 1.0f - 0.65f * y01 * smoothstep(0.5f, 0.82f, holes);
+
   return fmaxf(dens * vol.density_scale, 0.0f);
 }
 
@@ -238,7 +253,7 @@ __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const n
     return;
   }
 
-  constexpr int kSteps = 56;
+  constexpr int kSteps = 64;
   const float span = t_far - t_near;
   const float jitter = nrtx::rnd(prd->seed);
   const float dt = span / static_cast<float>(kSteps);
@@ -260,9 +275,8 @@ __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const n
     const float height01 =
         nrtx::clamp((p.y - (vol.center.y - vol.half_extents.y)) / fmaxf(2.0f * vol.half_extents.y, 1e-3f), 0.0f,
                     1.0f);
-    // Partially decouple emission from density so the body stays bright, not only the core.
-    const float3 emit =
-        flame_emission_color(height01, dens) * vol.emission_scale * (0.55f + dens);
+    // dens^2: bright filament cores, transparent edges
+    const float3 emit = flame_emission_color(height01, dens) * vol.emission_scale * (dens * dens);
     Le += make_float3(Tr, Tr, Tr) * emit * dt;
     Tr *= expf(-sigma_t * dt);
     if (Tr < 1e-3f) {

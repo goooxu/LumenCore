@@ -73,14 +73,14 @@ def main() -> int:
     scene.add_mesh(lc.make_box((0.34, 0.18, -1.40), (0.40, 0.42, -1.34), metal))
 
     # Procedural volumetric flame (primary look) + auto NEE proxy light
-    # Tall narrow flame that sits above the logs (not a box filling the firebox)
+    # Tall narrow AABB for sparse filament tongues
     scene.add_flame_volume(
-        center=(0.0, 0.58, -1.55),
-        half_extents=(0.28, 0.48, 0.18),
-        emission_scale=(180.0, 70.0, 12.0),
-        density_scale=2.8,
-        absorption=1.5,
-        noise_scale=2.5,
+        center=(0.0, 0.62, -1.55),
+        half_extents=(0.30, 0.55, 0.20),
+        emission_scale=(320.0, 120.0, 18.0),
+        density_scale=3.4,
+        absorption=1.2,
+        noise_scale=3.0,
         time=time,
         add_proxy_light=True,
     )
