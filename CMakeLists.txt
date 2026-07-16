@@ -26,9 +26,19 @@ if(NOT EXISTS "${OPTIX_INCLUDE_DIR}/optix.h")
   message(FATAL_ERROR "OptiX headers not found at ${OPTIX_INCLUDE_DIR}")
 endif()
 
+set(PHYSX_ROOT "${CMAKE_SOURCE_DIR}/third_party/physx" CACHE PATH "PhysX 5 install root (include/ + lib/)")
+set(PHYSX_LIB_DIR "${PHYSX_ROOT}/lib")
+set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
+if(NOT EXISTS "${PHYSX_LIB_DIR}/libPhysX_static_64.a")
+  message(FATAL_ERROR
+    "PhysX static libraries not found under ${PHYSX_LIB_DIR}.\n"
+    "Run scripts/setup_physx.sh (requires network on first fetch) or set -DPHYSX_ROOT=...")
+endif()
+
 add_library(nrtx_host
   src/host/mesh.cpp
   src/host/obj_loader.cpp
+  src/host/physx_world.cpp
   src/host/renderer.cpp
 )
 target_include_directories(nrtx_host
@@ -37,9 +47,22 @@ target_include_directories(nrtx_host
     ${CMAKE_SOURCE_DIR}/src/common
     ${OPTIX_INCLUDE_DIR}
     ${CMAKE_SOURCE_DIR}/third_party
+    ${PHYSX_INCLUDE_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
-target_link_libraries(nrtx_host PUBLIC CUDA::cudart CUDA::cuda_driver)
+target_compile_definitions(nrtx_host PUBLIC PX_PHYSX_STATIC_LIB)
+target_link_libraries(nrtx_host PUBLIC
+  CUDA::cudart
+  CUDA::cuda_driver
+  ${PHYSX_LIB_DIR}/libPhysXExtensions_static_64.a
+  ${PHYSX_LIB_DIR}/libPhysX_static_64.a
+  ${PHYSX_LIB_DIR}/libPhysXPvdSDK_static_64.a
+  ${PHYSX_LIB_DIR}/libPhysXCooking_static_64.a
+  ${PHYSX_LIB_DIR}/libPhysXCommon_static_64.a
+  ${PHYSX_LIB_DIR}/libPhysXFoundation_static_64.a
+  pthread
+  dl
+)
 set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 
@@ -77,17 +100,3 @@ set_target_properties(lumencore PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
 )
-
-option(LUMENCORE_BUILD_CPP_EXAMPLES "Build legacy C++ example binaries" OFF)
-if(LUMENCORE_BUILD_CPP_EXAMPLES)
-  function(nrtx_add_example name)
-    add_executable(${name} examples/${name}.cc)
-    target_link_libraries(${name} PRIVATE nrtx_host)
-    add_dependencies(${name} nrtx_shaders)
-    set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-  endfunction()
-  nrtx_add_example(cornell)
-  nrtx_add_example(materials_ball)
-  nrtx_add_example(outdoor_env)
-  nrtx_add_example(yellow_buddy)
-endif()

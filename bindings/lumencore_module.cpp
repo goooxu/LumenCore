@@ -54,7 +54,7 @@ Material make_material(const py::object &base_color, float metallic, float rough
 } // namespace
 
 PYBIND11_MODULE(lumencore, m) {
-  m.doc() = "LumenCore OptiX path tracer Python API";
+  m.doc() = "LumenCore OptiX path tracer + PhysX rigid body Python API";
 
   py::class_<Vec3>(m, "Vec3")
       .def(py::init<>())
@@ -223,4 +223,92 @@ PYBIND11_MODULE(lumencore, m) {
       },
       py::arg("input"), py::arg("translate"), py::arg("scale"),
       py::arg("rotate_xyz_radians") = py::make_tuple(0.0f, 0.0f, 0.0f));
+
+  py::class_<Pose>(m, "Pose")
+      .def(py::init<>())
+      .def(py::init([](const py::object &position, const py::object &quat) {
+             Pose p;
+             p.position = to_float3(position);
+             const py::sequence q = py::reinterpret_borrow<py::sequence>(quat);
+             if (q.size() != 4) {
+               throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
+             }
+             p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
+                                  py::cast<float>(q[3]));
+             return p;
+           }),
+           py::arg("position") = py::make_tuple(0.0f, 0.0f, 0.0f),
+           py::arg("quat") = py::make_tuple(0.0f, 0.0f, 0.0f, 1.0f))
+      .def_property(
+          "position", [](const Pose &p) { return from_float3(p.position); },
+          [](Pose &p, const py::object &v) { p.position = to_float3(v); })
+      .def_property(
+          "quat",
+          [](const Pose &p) { return py::make_tuple(p.quat.x, p.quat.y, p.quat.z, p.quat.w); },
+          [](Pose &p, const py::object &v) {
+            const py::sequence q = py::reinterpret_borrow<py::sequence>(v);
+            if (q.size() != 4) {
+              throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
+            }
+            p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
+                                 py::cast<float>(q[3]));
+          });
+
+  py::class_<PhysXWorld>(m, "PhysXWorld")
+      .def(py::init<>())
+      .def("init", &PhysXWorld::init, py::arg("prefer_gpu") = true)
+      .def("using_gpu", &PhysXWorld::using_gpu)
+      .def("backend", &PhysXWorld::backend)
+      .def(
+          "add_static_box",
+          [](PhysXWorld &w, const py::object &half_extents, const Pose &pose) {
+            return w.add_static_box(to_float3(half_extents), pose);
+          },
+          py::arg("half_extents"), py::arg("pose") = Pose{})
+      .def(
+          "add_dynamic_box",
+          [](PhysXWorld &w, const py::object &half_extents, float density, const Pose &pose) {
+            return w.add_dynamic_box(to_float3(half_extents), density, pose);
+          },
+          py::arg("half_extents"), py::arg("density"), py::arg("pose") = Pose{})
+      .def(
+          "add_dynamic_sphere",
+          [](PhysXWorld &w, float radius, float density, const Pose &pose) {
+            return w.add_dynamic_sphere(radius, density, pose);
+          },
+          py::arg("radius"), py::arg("density"), py::arg("pose") = Pose{})
+      .def(
+          "set_linear_velocity",
+          [](PhysXWorld &w, int actor_id, const py::object &velocity) {
+            w.set_linear_velocity(actor_id, to_float3(velocity));
+          },
+          py::arg("actor_id"), py::arg("velocity"))
+      .def(
+          "set_angular_velocity",
+          [](PhysXWorld &w, int actor_id, const py::object &velocity) {
+            w.set_angular_velocity(actor_id, to_float3(velocity));
+          },
+          py::arg("actor_id"), py::arg("velocity"))
+      .def("step", &PhysXWorld::step, py::arg("dt"), py::arg("substeps") = 1)
+      .def("get_pose", &PhysXWorld::get_pose, py::arg("actor_id"));
+
+  m.def(
+      "apply_pose_to_mesh",
+      [](const Mesh &input, const Pose &pose) { return apply_pose_to_mesh(input, pose); },
+      py::arg("input"), py::arg("pose"));
+
+  m.def(
+      "apply_pose_to_box_mesh",
+      [](const py::object &half_extents, const Pose &pose, int material_id) {
+        return apply_pose_to_box_mesh(to_float3(half_extents), pose, material_id);
+      },
+      py::arg("half_extents"), py::arg("pose"), py::arg("material_id"));
+
+  m.def(
+      "apply_pose_to_sphere_mesh",
+      [](float radius, const Pose &pose, int material_id, int slices, int stacks) {
+        return apply_pose_to_sphere_mesh(radius, pose, material_id, slices, stacks);
+      },
+      py::arg("radius"), py::arg("pose"), py::arg("material_id"), py::arg("slices") = 32,
+      py::arg("stacks") = 16);
 }

@@ -5,6 +5,20 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-16
+
+### Added
+
+- **PhysX 5** rigid-body integration (`PhysXWorld` / `Pose`) with GPU dynamics when `libPhysXGpu_64.so` is available, otherwise CPU fallback
+- Python bindings for PhysX plus `apply_pose_to_box_mesh` / `apply_pose_to_sphere_mesh` / `apply_pose_to_mesh`
+- Demo scene `python/scenes/physx_collapse.py` — brick tower + metal balls, multi-frame OptiX renders
+- `scripts/setup_physx.sh` and vendored PhysX headers under `third_party/physx/include`
+- Gallery asset `outputs/physx_collapse.png` (+ frame sequence / contact sheet)
+
+### Changed
+
+- README narrative is now **PhysX + OptiX** dual-stack; `docker/run.sh` adds PhysX GPU library path
+
 ## [0.4.0] - 2026-07-15
 
 ### Added
@@ -60,6 +74,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
 - Docker-based build/run helper for RTX GPUs
 
+[0.5.0]: https://github.com/goooxu/LumenCore/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/goooxu/LumenCore/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/goooxu/LumenCore/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/goooxu/LumenCore/compare/v0.3.0...v0.3.1

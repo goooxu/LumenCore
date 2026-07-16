@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LaunchParams.h"
+#include "nrtx/physx_world.h"
 #include "vec.h"
 
 #include <memory>
@@ -103,5 +104,15 @@ Mesh load_obj(const std::string &path,
 
 Mesh transform_mesh(const Mesh &input, const float3 &translate, const float3 &scale,
                     const float3 &rotate_xyz_radians = make_float3(0.0f, 0.0f, 0.0f));
+
+// Apply a rigid Pose (quaternion + translation) to mesh vertices (local → world).
+Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose);
+
+// Axis-aligned box centered at origin with the given half-extents, then posed.
+Mesh apply_pose_to_box_mesh(const float3 &half_extents, const Pose &pose, int material_id);
+
+// UV sphere centered at origin, then posed.
+Mesh apply_pose_to_sphere_mesh(float radius, const Pose &pose, int material_id, int slices = 32,
+                               int stacks = 16);
 
 } // namespace nrtx

@@ -74,4 +74,36 @@ Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int sli
   return mesh;
 }
 
+namespace {
+
+float3 rotate_by_quat(const float3 &v, const float4 &q) {
+  // q = (x, y, z, w); v' = q * v * q^{-1}
+  const float3 u = make_float3(q.x, q.y, q.z);
+  const float s = q.w;
+  const float3 t = cross(u, v) * 2.0f;
+  return v + t * s + cross(u, t);
+}
+
+} // namespace
+
+Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose) {
+  Mesh out = input;
+  for (float3 &v : out.vertices) {
+    v = rotate_by_quat(v, pose.quat) + pose.position;
+  }
+  return out;
+}
+
+Mesh apply_pose_to_box_mesh(const float3 &half_extents, const Pose &pose, int material_id) {
+  const float3 min_p = make_float3(-half_extents.x, -half_extents.y, -half_extents.z);
+  const float3 max_p = make_float3(half_extents.x, half_extents.y, half_extents.z);
+  return apply_pose_to_mesh(make_box(min_p, max_p, material_id), pose);
+}
+
+Mesh apply_pose_to_sphere_mesh(float radius, const Pose &pose, int material_id, int slices,
+                               int stacks) {
+  return apply_pose_to_mesh(make_uv_sphere(make_float3(0.0f, 0.0f, 0.0f), radius, material_id, slices, stacks),
+                            pose);
+}
+
 } // namespace nrtx
