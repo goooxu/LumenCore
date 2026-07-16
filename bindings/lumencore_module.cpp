@@ -166,6 +166,19 @@ PYBIND11_MODULE(lumencore, m) {
             s.add_quad_light(to_float3(corner), to_float3(u), to_float3(v), to_float3(emission));
           },
           py::arg("corner"), py::arg("u"), py::arg("v"), py::arg("emission"))
+      .def(
+          "add_flame_volume",
+          [](Scene &s, const py::object &center, const py::object &half_extents,
+             const py::object &emission_scale, float density_scale, float absorption,
+             float noise_scale, float time, bool add_proxy_light) {
+            return s.add_flame_volume(to_float3(center), to_float3(half_extents),
+                                      to_float3(emission_scale), density_scale, absorption,
+                                      noise_scale, time, add_proxy_light);
+          },
+          py::arg("center"), py::arg("half_extents"),
+          py::arg("emission_scale") = py::make_tuple(28.0f, 12.0f, 2.5f),
+          py::arg("density_scale") = 1.8f, py::arg("absorption") = 3.5f,
+          py::arg("noise_scale") = 2.4f, py::arg("time") = 0.0f, py::arg("add_proxy_light") = true)
       .def_property(
           "background_top", [](const Scene &s) { return from_float3(s.background_top); },
           [](Scene &s, const py::object &v) { s.background_top = to_float3(v); })

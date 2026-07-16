@@ -83,6 +83,171 @@ __forceinline__ __device__ float3 sample_quad_light(const nrtx::QuadLight &light
   return light.emission;
 }
 
+__forceinline__ __device__ float fractf(float x) { return x - floorf(x); }
+
+__forceinline__ __device__ float hash31(float3 p) {
+  p = make_float3(fractf(p.x * 0.1031f), fractf(p.y * 0.1031f), fractf(p.z * 0.1031f));
+  const float d = nrtx::dot(p, make_float3(p.y + 33.33f, p.z + 33.33f, p.x + 33.33f));
+  p = p + make_float3(d, d, d);
+  return fractf((p.x + p.y) * p.z);
+}
+
+__forceinline__ __device__ float value_noise(float3 p) {
+  const float3 i = make_float3(floorf(p.x), floorf(p.y), floorf(p.z));
+  const float3 f = make_float3(p.x - i.x, p.y - i.y, p.z - i.z);
+  const float3 u = f * f * (make_float3(3.0f, 3.0f, 3.0f) - 2.0f * f);
+
+  const float n000 = hash31(i + make_float3(0, 0, 0));
+  const float n100 = hash31(i + make_float3(1, 0, 0));
+  const float n010 = hash31(i + make_float3(0, 1, 0));
+  const float n110 = hash31(i + make_float3(1, 1, 0));
+  const float n001 = hash31(i + make_float3(0, 0, 1));
+  const float n101 = hash31(i + make_float3(1, 0, 1));
+  const float n011 = hash31(i + make_float3(0, 1, 1));
+  const float n111 = hash31(i + make_float3(1, 1, 1));
+
+  const float nx00 = n000 * (1.0f - u.x) + n100 * u.x;
+  const float nx10 = n010 * (1.0f - u.x) + n110 * u.x;
+  const float nx01 = n001 * (1.0f - u.x) + n101 * u.x;
+  const float nx11 = n011 * (1.0f - u.x) + n111 * u.x;
+  const float nxy0 = nx00 * (1.0f - u.y) + nx10 * u.y;
+  const float nxy1 = nx01 * (1.0f - u.y) + nx11 * u.y;
+  return nxy0 * (1.0f - u.z) + nxy1 * u.z;
+}
+
+__forceinline__ __device__ float fbm(float3 p) {
+  float sum = 0.0f;
+  float amp = 0.5f;
+  float freq = 1.0f;
+  for (int i = 0; i < 4; ++i) {
+    sum += amp * value_noise(p * freq);
+    freq *= 2.02f;
+    amp *= 0.5f;
+  }
+  return sum;
+}
+
+// Ray vs AABB slab. Returns true if segment [tmin,tmax] overlaps the box.
+__forceinline__ __device__ bool intersect_aabb(const float3 &ro, const float3 &rd, const float3 &bmin,
+                                              const float3 &bmax, float &t_near, float &t_far) {
+  float t0 = -1e30f;
+  float t1 = 1e30f;
+  const float3 inv = make_float3(1.0f / (fabsf(rd.x) > 1e-8f ? rd.x : copysignf(1e-8f, rd.x)),
+                                 1.0f / (fabsf(rd.y) > 1e-8f ? rd.y : copysignf(1e-8f, rd.y)),
+                                 1.0f / (fabsf(rd.z) > 1e-8f ? rd.z : copysignf(1e-8f, rd.z)));
+  const float3 t_a = (bmin - ro) * inv;
+  const float3 t_b = (bmax - ro) * inv;
+  const float3 t_small = make_float3(fminf(t_a.x, t_b.x), fminf(t_a.y, t_b.y), fminf(t_a.z, t_b.z));
+  const float3 t_big = make_float3(fmaxf(t_a.x, t_b.x), fmaxf(t_a.y, t_b.y), fmaxf(t_a.z, t_b.z));
+  t0 = fmaxf(t0, fmaxf(t_small.x, fmaxf(t_small.y, t_small.z)));
+  t1 = fminf(t1, fminf(t_big.x, fminf(t_big.y, t_big.z)));
+  if (t1 < t0 || t1 < 0.0f) {
+    return false;
+  }
+  t_near = fmaxf(t0, 0.0f);
+  t_far = t1;
+  return t_far > t_near;
+}
+
+__forceinline__ __device__ float3 flame_emission_color(float height01, float density) {
+  // height: 0 base → 1 tip; denser cores run hotter (whiter)
+  const float hot = nrtx::clamp(density * 1.4f, 0.0f, 1.0f);
+  const float3 tip = make_float3(1.0f, 0.25f, 0.04f);
+  const float3 mid = make_float3(1.0f, 0.55f, 0.08f);
+  const float3 core = make_float3(1.0f, 0.92f, 0.55f);
+  float3 c = nrtx::lerp(tip, mid, nrtx::clamp(1.0f - height01 * 1.2f, 0.0f, 1.0f));
+  c = nrtx::lerp(c, core, hot * (1.0f - height01));
+  return c;
+}
+
+__forceinline__ __device__ float flame_density(const nrtx::FlameVolume &vol, const float3 &p) {
+  const float3 d = p - vol.center;
+  const float3 local =
+      make_float3(d.x / vol.half_extents.x, d.y / vol.half_extents.y, d.z / vol.half_extents.z);
+  // Vertical teardrop envelope
+  const float h = nrtx::clamp(0.5f * (local.y + 1.0f), 0.0f, 1.0f); // 0 base → 1 tip
+  const float radius = 0.55f * (1.0f - h * 0.85f);
+  const float r2 = local.x * local.x + local.z * local.z;
+  if (r2 > radius * radius * 1.35f || local.y < -1.05f || local.y > 1.05f) {
+    return 0.0f;
+  }
+  const float radial = 1.0f - sqrtf(r2) / fmaxf(radius, 1e-3f);
+  const float height_falloff = powf(1.0f - h, 0.65f);
+
+  // Upward-scrolling domain warping
+  const float3 q =
+      make_float3(p.x, p.y - vol.time * 1.35f, p.z) * vol.noise_scale + make_float3(0.0f, vol.time * 0.4f, 0.0f);
+  float n = fbm(q);
+  n = nrtx::clamp((n - 0.28f) * 1.9f, 0.0f, 1.0f);
+
+  // Side flicker
+  const float wobble = 0.65f + 0.35f * value_noise(make_float3(p.x * 3.0f + vol.time, p.y * 0.5f, p.z * 3.0f));
+  return vol.density_scale * radial * height_falloff * n * wobble;
+}
+
+__forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const nrtx::FlameVolume &vol,
+                                                      const float3 &ro, const float3 &rd, float t_enter) {
+  const float3 bmin = vol.center - vol.half_extents;
+  const float3 bmax = vol.center + vol.half_extents;
+  float t_near = 0.0f;
+  float t_far = 0.0f;
+  if (!intersect_aabb(ro, rd, bmin, bmax, t_near, t_far)) {
+    // Should not happen on a proxy hit; skip past the surface.
+    prd->origin = ro + rd * (t_enter + 1e-3f);
+    prd->depth += 1;
+    return;
+  }
+  t_near = fmaxf(t_near, t_enter);
+  if (t_far <= t_near) {
+    prd->origin = ro + rd * (t_enter + 1e-3f);
+    prd->depth += 1;
+    return;
+  }
+
+  constexpr int kSteps = 40;
+  const float span = t_far - t_near;
+  const float jitter = nrtx::rnd(prd->seed);
+  const float dt = span / static_cast<float>(kSteps);
+
+  float3 Le = make_float3(0.0f, 0.0f, 0.0f);
+  float Tr = 1.0f;
+
+  for (int i = 0; i < kSteps; ++i) {
+    const float t = t_near + (static_cast<float>(i) + jitter) * dt;
+    if (t >= t_far) {
+      break;
+    }
+    const float3 p = ro + rd * t;
+    const float dens = flame_density(vol, p);
+    if (dens <= 1e-5f) {
+      continue;
+    }
+    const float sigma_t = dens * vol.absorption;
+    const float height01 =
+        nrtx::clamp((p.y - (vol.center.y - vol.half_extents.y)) / fmaxf(2.0f * vol.half_extents.y, 1e-3f), 0.0f,
+                    1.0f);
+    const float3 emit = flame_emission_color(height01, dens) * vol.emission_scale * dens;
+    Le += make_float3(Tr, Tr, Tr) * emit * dt;
+    Tr *= expf(-sigma_t * dt);
+    if (Tr < 1e-3f) {
+      Tr = 0.0f;
+      break;
+    }
+  }
+
+  prd->radiance += prd->throughput * Le;
+  prd->throughput = prd->throughput * Tr;
+
+  // Continue just past the far face so we do not re-hit the proxy box.
+  prd->origin = ro + rd * (t_far + 1e-3f);
+  prd->direction = rd;
+  prd->depth += 1;
+
+  if (nrtx::luminance(prd->throughput) < 1e-4f) {
+    prd->done = 1;
+  }
+}
+
 __forceinline__ __device__ void trace_radiance(RadiancePRD *prd) {
   unsigned p0, p1;
   pack_pointer(prd, p0, p1);
@@ -217,12 +382,26 @@ extern "C" __global__ void __closesthit__radiance() {
   float3 n = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_obj));
 
   const float3 ray_dir = optixGetWorldRayDirection();
+  const float3 ray_origin = optixGetWorldRayOrigin();
   if (nrtx::dot(n, ray_dir) > 0.0f) {
     n = -n;
   }
 
   const int mat_id = hit_data->material_ids[prim_idx];
   const nrtx::MaterialGPU mat = params.materials[mat_id];
+
+  // Procedural flame volume: ray-march through the AABB proxy.
+  if ((mat.flags & nrtx::MATERIAL_FLAG_VOLUME_FLAME) && mat.volume_index >= 0 &&
+      mat.volume_index < params.volume_count) {
+    if (prd->first_hit) {
+      prd->albedo_aov = make_float3(1.0f, 0.45f, 0.08f);
+      prd->normal_aov = n;
+      prd->first_hit = 0;
+    }
+    const float t_hit = optixGetRayTmax();
+    integrate_flame_volume(prd, params.volumes[mat.volume_index], ray_origin, ray_dir, t_hit);
+    return;
+  }
 
   if (prd->first_hit) {
     prd->albedo_aov = mat.base_color;
@@ -321,6 +500,18 @@ extern "C" __global__ void __closesthit__radiance() {
 
 extern "C" __global__ void __anyhit__shadow() {
   ShadowPRD *prd = get_shadow_prd();
+  const nrtx::HitGroupData *hit_data =
+      reinterpret_cast<nrtx::HitGroupData *>(optixGetSbtDataPointer());
+  const int prim_idx = optixGetPrimitiveIndex();
+  const int mat_id = hit_data->material_ids[prim_idx];
+  if (mat_id >= 0 && mat_id < params.material_count) {
+    const nrtx::MaterialGPU mat = params.materials[mat_id];
+    // Flame proxy boxes are transparent to shadow rays (illumination uses NEE proxy lights).
+    if (mat.flags & nrtx::MATERIAL_FLAG_VOLUME_FLAME) {
+      optixIgnoreIntersection();
+      return;
+    }
+  }
   prd->occluded = 1;
   optixTerminateRay();
 }

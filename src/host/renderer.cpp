@@ -532,7 +532,8 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     materials_gpu[i].transmission = m.transmission;
     materials_gpu[i].ior = m.ior;
     materials_gpu[i].emission = m.emission;
-    materials_gpu[i].pad = 0;
+    materials_gpu[i].flags = m.flags;
+    materials_gpu[i].volume_index = m.volume_index;
   }
   CudaBuffer<MaterialGPU> d_materials;
   d_materials.upload(materials_gpu);
@@ -540,6 +541,11 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   CudaBuffer<QuadLight> d_lights;
   if (!scene.lights.empty()) {
     d_lights.upload(scene.lights);
+  }
+
+  CudaBuffer<FlameVolume> d_volumes;
+  if (!scene.volumes.empty()) {
+    d_volumes.upload(scene.volumes);
   }
 
   const int width = config.width;
@@ -575,6 +581,8 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   lp.material_count = static_cast<int>(materials_gpu.size());
   lp.lights = d_lights.ptr;
   lp.light_count = static_cast<int>(scene.lights.size());
+  lp.volumes = d_volumes.ptr;
+  lp.volume_count = static_cast<int>(scene.volumes.size());
   lp.background_top = scene.background_top;
   lp.background_bottom = scene.background_bottom;
   lp.enable_nee = config.enable_nee ? 1 : 0;

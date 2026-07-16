@@ -12,6 +12,11 @@ enum RayType {
   RAY_TYPE_COUNT = 2
 };
 
+enum MaterialFlags {
+  MATERIAL_FLAG_NONE = 0,
+  MATERIAL_FLAG_VOLUME_FLAME = 1
+};
+
 struct MaterialGPU {
   float3 base_color;
   float metallic;
@@ -19,7 +24,8 @@ struct MaterialGPU {
   float transmission;
   float ior;
   float3 emission;
-  int pad;
+  int flags;
+  int volume_index; // valid when flags & MATERIAL_FLAG_VOLUME_FLAME
 };
 
 struct QuadLight {
@@ -28,6 +34,17 @@ struct QuadLight {
   float3 v;
   float3 emission;
   float inv_area;
+  int pad;
+};
+
+struct FlameVolume {
+  float3 center;
+  float3 half_extents;
+  float3 emission_scale;
+  float density_scale;
+  float absorption;
+  float noise_scale;
+  float time;
   int pad;
 };
 
@@ -55,6 +72,8 @@ struct LaunchParams {
   int material_count;
   QuadLight *lights;
   int light_count;
+  FlameVolume *volumes;
+  int volume_count;
   float3 background_top;
   float3 background_bottom;
   int enable_nee;

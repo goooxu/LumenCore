@@ -106,4 +106,42 @@ Mesh apply_pose_to_sphere_mesh(float radius, const Pose &pose, int material_id, 
                             pose);
 }
 
+int Scene::add_flame_volume(const float3 &center, const float3 &half_extents,
+                            const float3 &emission_scale, float density_scale, float absorption,
+                            float noise_scale, float time, bool add_proxy_light) {
+  FlameVolume vol;
+  vol.center = center;
+  vol.half_extents = half_extents;
+  vol.emission_scale = emission_scale;
+  vol.density_scale = density_scale;
+  vol.absorption = absorption;
+  vol.noise_scale = noise_scale;
+  vol.time = time;
+  vol.pad = 0;
+  const int volume_index = static_cast<int>(volumes.size());
+  volumes.push_back(vol);
+
+  Material mat;
+  mat.base_color = make_float3(0.0f, 0.0f, 0.0f);
+  mat.roughness = 1.0f;
+  mat.flags = MATERIAL_FLAG_VOLUME_FLAME;
+  mat.volume_index = volume_index;
+  const int mat_id = add_material(mat);
+
+  const float3 min_p = center - half_extents;
+  const float3 max_p = center + half_extents;
+  add_mesh(make_box(min_p, max_p, mat_id));
+
+  if (add_proxy_light) {
+    const float3 light_center = make_float3(center.x, center.y - half_extents.y * 0.15f, center.z);
+    const float3 u = make_float3(half_extents.x * 0.7f, 0.0f, 0.0f);
+    const float3 v = make_float3(0.0f, 0.0f, half_extents.z * 0.7f);
+    const float3 corner = light_center - u * 0.5f - v * 0.5f;
+    const float flicker = 0.85f + 0.15f * std::sin(time * 7.3f);
+    const float3 proxy_emission = emission_scale * (1.15f * flicker);
+    add_quad_light(corner, u, v, proxy_emission);
+  }
+  return volume_index;
+}
+
 } // namespace nrtx

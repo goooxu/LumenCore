@@ -24,6 +24,8 @@ struct Material {
   float transmission = 0.0f;
   float ior = 1.5f;
   float3 emission = make_float3(0.0f, 0.0f, 0.0f);
+  int flags = MATERIAL_FLAG_NONE;
+  int volume_index = -1;
 };
 
 struct Camera {
@@ -40,6 +42,7 @@ struct Scene {
   std::vector<Mesh> meshes;
   std::vector<Material> materials;
   std::vector<QuadLight> lights;
+  std::vector<FlameVolume> volumes;
   float3 background_top = make_float3(0.6f, 0.7f, 0.9f);
   float3 background_bottom = make_float3(0.15f, 0.15f, 0.2f);
 
@@ -62,6 +65,12 @@ struct Scene {
     light.pad = 0;
     lights.push_back(light);
   }
+
+  // Procedural flame volume: proxy AABB mesh + optional NEE face light at the fire core.
+  int add_flame_volume(const float3 &center, const float3 &half_extents,
+                       const float3 &emission_scale = make_float3(28.0f, 12.0f, 2.5f),
+                       float density_scale = 1.8f, float absorption = 3.5f,
+                       float noise_scale = 2.4f, float time = 0.0f, bool add_proxy_light = true);
 };
 
 struct RenderConfig {
