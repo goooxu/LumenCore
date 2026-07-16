@@ -4,6 +4,8 @@ NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CU
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
+**技术报告（中文，面向图形学初学者）**：[docs/report/](docs/report/) — 渲染方程、路径追踪、GGX/MIS/HDRI、OptiX 与 PhysX 实现说明。
+
 ## Gallery
 
 ### GGX Studio (HDRI + roughness)
@@ -136,6 +138,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 | Path | Role |
 |------|------|
+| `docs/report/` | 中文技术报告（分章 Markdown + `figures/`） |
 | `bindings/` | pybind11 module `lumencore` |
 | `python/scenes/` | Scene scripts (ggx_studio, cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace, water_pool) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
