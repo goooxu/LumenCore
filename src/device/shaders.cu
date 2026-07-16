@@ -497,14 +497,29 @@ extern "C" __global__ void __closesthit__radiance() {
 
   const float2 bary = optixGetTriangleBarycentrics();
   const float3 p_obj = (1.0f - bary.x - bary.y) * v0 + bary.x * v1 + bary.y * v2;
-  float3 n_obj = nrtx::normalize(nrtx::cross(v1 - v0, v2 - v0));
+  float3 n_geom = nrtx::normalize(nrtx::cross(v1 - v0, v2 - v0));
+  float3 n_obj = n_geom;
+  if (hit_data->normals) {
+    const float3 n0 = hit_data->normals[index.x];
+    const float3 n1 = hit_data->normals[index.y];
+    const float3 n2 = hit_data->normals[index.z];
+    const float3 n_interp = (1.0f - bary.x - bary.y) * n0 + bary.x * n1 + bary.y * n2;
+    if (nrtx::dot(n_interp, n_interp) > 1e-8f) {
+      n_obj = nrtx::normalize(n_interp);
+    }
+  }
 
   const float3 p = optixTransformPointFromObjectToWorldSpace(p_obj);
+  float3 ng_geom = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_geom));
   float3 ng = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_obj));
 
   const float3 ray_dir = optixGetWorldRayDirection();
   const float3 ray_origin = optixGetWorldRayOrigin();
-  const bool front_facing = nrtx::dot(ray_dir, ng) < 0.0f;
+  // Face classification uses geometric normal; shading uses interpolated normals.
+  const bool front_facing = nrtx::dot(ray_dir, ng_geom) < 0.0f;
+  if (nrtx::dot(ng, ng_geom) < 0.0f) {
+    ng = -ng;
+  }
   float3 n = front_facing ? ng : -ng;
 
   const int mat_id = hit_data->material_ids[prim_idx];

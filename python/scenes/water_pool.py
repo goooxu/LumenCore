@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stone pool with procedural water; Sparky + Capsule Mascot as reflection subjects."""
+"""Enclosed stone pool with calm procedural water; Sparky + Capsule Mascot on the far deck."""
 from __future__ import print_function
 
 import os
@@ -36,23 +36,23 @@ def main():
 
     scene = lc.Scene()
 
-    stone = scene.add_material(lc.Material(base_color=(0.32, 0.30, 0.28), roughness=0.88))
-    stone_dark = scene.add_material(lc.Material(base_color=(0.18, 0.17, 0.16), roughness=0.9))
-    wood = scene.add_material(lc.Material(base_color=(0.42, 0.26, 0.12), roughness=0.72))
-    tile = scene.add_material(lc.Material(base_color=(0.08, 0.22, 0.28), roughness=0.5))
-    sand = scene.add_material(lc.Material(base_color=(0.45, 0.40, 0.32), roughness=0.95))
-    # Dark backdrop so water mirrors characters instead of a white wash.
-    plaster = scene.add_material(lc.Material(base_color=(0.12, 0.16, 0.28), roughness=0.92))
+    stone = scene.add_material(lc.Material(base_color=(0.38, 0.36, 0.34), roughness=0.85))
+    stone_dark = scene.add_material(lc.Material(base_color=(0.24, 0.23, 0.22), roughness=0.88))
+    wood = scene.add_material(lc.Material(base_color=(0.50, 0.32, 0.16), roughness=0.7))
+    tile = scene.add_material(lc.Material(base_color=(0.18, 0.38, 0.42), roughness=0.45))
+    sand = scene.add_material(lc.Material(base_color=(0.50, 0.46, 0.38), roughness=0.95))
+    plaster = scene.add_material(lc.Material(base_color=(0.28, 0.34, 0.45), roughness=0.92))
+    # Moderate Beer-Lambert so depth reads without killing the floor.
     water = scene.add_material(
         lc.Material(
-            base_color=(0.40, 0.75, 0.88),
+            base_color=(0.65, 0.85, 0.92),
             roughness=0.0,
             transmission=1.0,
             ior=1.33,
-            absorption=(1.1, 0.28, 0.12),
+            absorption=(0.40, 0.14, 0.07),
         )
     )
-    accent_b = scene.add_material(lc.Material(base_color=(0.95, 0.35, 0.12), roughness=0.35))
+    accent = scene.add_material(lc.Material(base_color=(0.90, 0.28, 0.16), roughness=0.35))
 
     albedo_path = resolve_asset("assets/models/sparky_albedo.png")
     tex = scene.add_texture(albedo_path)
@@ -147,40 +147,43 @@ def main():
         "mascot_antenna_tip": ant_tip,
     }
 
-    scene.add_mesh(lc.make_quad((-12, 0, -12), (24, 0, 0), (0, 0, 24), sand))
+    scene.add_mesh(lc.make_quad((-10, 0, -10), (20, 0, 0), (0, 0, 20), sand))
 
-    # Three-walled pool open toward +Z (camera) so the water surface is unobstructed.
-    scene.add_mesh(lc.make_box((-2.1, 0.0, -1.5), (2.1, 0.06, 1.5), tile))  # floor
-    scene.add_mesh(lc.make_box((-2.1, 0.06, -1.5), (2.1, 0.72, -1.2), stone))  # -Z back
-    scene.add_mesh(lc.make_box((-2.1, 0.06, -1.2), (-1.8, 0.72, 1.5), stone))  # -X
-    scene.add_mesh(lc.make_box((1.8, 0.06, -1.2), (2.1, 0.72, 1.5), stone))  # +X
-    # Coping on three walls only
-    scene.add_mesh(lc.make_box((-2.3, 0.72, -1.7), (2.3, 0.82, -1.5), stone_dark))
-    scene.add_mesh(lc.make_box((-2.3, 0.72, -1.5), (-2.1, 0.82, 1.5), stone_dark))
-    scene.add_mesh(lc.make_box((2.1, 0.72, -1.5), (2.3, 0.82, 1.5), stone_dark))
-    # Far deck behind back wall
-    scene.add_mesh(lc.make_box((-2.6, 0.82, -3.3), (2.6, 0.90, -1.7), wood))
-    scene.add_mesh(lc.make_quad((-3.2, 0.90, -3.25), (6.4, 0, 0), (0, 3.4, 0), plaster))
+    # Enclosed four-wall pool. Inner basin ≈ [-1.75,1.75] x [-1.15,1.15].
+    scene.add_mesh(lc.make_box((-2.05, 0.0, -1.45), (2.05, 0.06, 1.45), tile))
+    scene.add_mesh(lc.make_box((-2.05, 0.06, -1.45), (2.05, 0.68, -1.15), stone))  # -Z
+    scene.add_mesh(lc.make_box((-2.05, 0.06, 1.15), (2.05, 0.68, 1.45), stone))  # +Z
+    scene.add_mesh(lc.make_box((-2.05, 0.06, -1.15), (-1.75, 0.68, 1.15), stone))  # -X
+    scene.add_mesh(lc.make_box((1.75, 0.06, -1.15), (2.05, 0.68, 1.15), stone))  # +X
+    # Coping rim flush with walls
+    scene.add_mesh(lc.make_box((-2.25, 0.68, -1.65), (2.25, 0.78, -1.45), stone_dark))
+    scene.add_mesh(lc.make_box((-2.25, 0.68, 1.45), (2.25, 0.78, 1.65), stone_dark))
+    scene.add_mesh(lc.make_box((-2.25, 0.68, -1.45), (-2.05, 0.78, 1.45), stone_dark))
+    scene.add_mesh(lc.make_box((2.05, 0.68, -1.45), (2.25, 0.78, 1.45), stone_dark))
+    # Far deck
+    scene.add_mesh(lc.make_box((-2.5, 0.78, -3.1), (2.5, 0.86, -1.65), wood))
+    scene.add_mesh(lc.make_quad((-3.0, 0.86, -3.05), (6.0, 0, 0), (0, 2.8, 0), plaster))
 
+    # Water slightly inset from inner walls so ripples never clip the stone.
     water_mesh = lc.make_water_surface(
-        center=(0.0, 0.0, 0.15),
-        half_extents_xz=(1.75, 0.0, 1.25),
-        y_base=0.58,
+        center=(0.0, 0.0, 0.0),
+        half_extents_xz=(1.68, 0.0, 1.08),
+        y_base=0.55,
         material_id=water,
-        nx=128,
-        nz=96,
+        nx=160,
+        nz=120,
         time=time,
     )
     scene.add_mesh(water_mesh)
     print("Procedural water surface time={}".format(time))
 
-    char_scale = 0.45
-    deck_y = 0.90
+    char_scale = 0.42
+    deck_y = 0.86
 
     sparky_path = resolve_asset("assets/models/sparky.obj")
     sparky = lc.load_obj(sparky_path, sparky_mtl, plastic_white)
     sparky = lc.transform_mesh(
-        sparky, (0.75, deck_y, -2.40), (char_scale,) * 3, (0.0, -0.15, 0.0)
+        sparky, (0.72, deck_y, -2.30), (char_scale,) * 3, (0.0, -0.18, 0.0)
     )
     scene.add_mesh(sparky)
     print("Loaded {}".format(sparky_path))
@@ -188,55 +191,56 @@ def main():
     mascot_path = resolve_asset("assets/models/capsule_mascot.obj")
     mascot = lc.load_obj(mascot_path, mascot_mtl, yellow)
     mascot = lc.transform_mesh(
-        mascot, (-0.80, deck_y, -2.35), (char_scale,) * 3, (0.0, 0.20, 0.0)
+        mascot, (-0.78, deck_y, -2.25), (char_scale,) * 3, (0.0, 0.22, 0.0)
     )
     scene.add_mesh(mascot)
     print("Loaded {}".format(mascot_path))
 
-    # Bright submerged accent for refraction through the water volume
-    scene.add_mesh(lc.make_uv_sphere((0.25, 0.25, 0.35), 0.20, accent_b))
+    # Submerged accent for refraction read
+    scene.add_mesh(lc.make_uv_sphere((0.2, 0.22, 0.15), 0.16, accent))
 
-    light_corner = (1.8, 4.8, 0.5)
-    light_u = (1.8, 0.0, 0.3)
-    light_v = (-0.2, 0.0, 1.8)
+    # Soft area sun — restrained so specular does not blow out
+    light_corner = (2.4, 5.0, -0.6)
+    light_u = (2.0, 0.0, 0.35)
+    light_v = (-0.25, 0.0, 2.0)
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(22, 20, 17))
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(16, 15, 13))
     )
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (22, 20, 17))
+    scene.add_quad_light(light_corner, light_u, light_v, (16, 15, 13))
 
-    warm = (80.0, 70.0, 55.0)
+    warm = (55.0, 48.0, 40.0)
     scene.add_spot_light(
-        position=(-0.80, 3.0, -1.6),
-        direction=(0.05, -0.75, -0.55),
+        position=(-0.78, 2.9, -1.5),
+        direction=(0.05, -0.8, -0.5),
         emission=warm,
-        angle_deg=26.0,
+        angle_deg=24.0,
         penumbra_deg=12.0,
     )
     scene.add_spot_light(
-        position=(0.75, 3.0, -1.6),
-        direction=(-0.05, -0.75, -0.55),
+        position=(0.72, 2.9, -1.5),
+        direction=(-0.05, -0.8, -0.5),
         emission=warm,
-        angle_deg=26.0,
+        angle_deg=24.0,
         penumbra_deg=12.0,
     )
-    # Cool skim light across the water toward camera
+    # Soft skim across water toward the camera for Fresnel
     scene.add_spot_light(
-        position=(0.0, 2.0, 3.2),
-        direction=(0.0, -0.45, -0.85),
-        emission=(35, 50, 70),
-        angle_deg=50.0,
-        penumbra_deg=18.0,
+        position=(0.0, 2.2, 3.0),
+        direction=(0.0, -0.4, -0.9),
+        emission=(18, 28, 42),
+        angle_deg=48.0,
+        penumbra_deg=16.0,
     )
 
-    scene.background_top = (0.18, 0.28, 0.48)
-    scene.background_bottom = (0.30, 0.34, 0.40)
+    scene.background_top = (0.22, 0.36, 0.58)
+    scene.background_bottom = (0.40, 0.45, 0.52)
 
-    # Look down across open water; characters sit in the upper third with clear reflections.
+    # High enough to read refraction near the camera; far water still mirrors the deck.
     camera = lc.Camera(
-        eye=(0.0, 1.55, 3.6),
-        lookat=(0.0, 0.55, -0.4),
-        fov_y_deg=40,
+        eye=(0.15, 2.05, 3.15),
+        lookat=(0.0, 0.40, -0.35),
+        fov_y_deg=42,
         aspect=16 / 9,
         aperture=0.0,
         focus_dist=4.0,

@@ -499,8 +499,10 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   // Merge meshes into one GAS
   std::vector<float3> vertices;
   std::vector<float2> texcoords;
+  std::vector<float3> normals;
   std::vector<int3> indices;
   std::vector<int> material_ids;
+  bool any_normals = false;
   for (const Mesh &mesh : scene.meshes) {
     const int base = static_cast<int>(vertices.size());
     vertices.insert(vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
@@ -508,6 +510,12 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
       texcoords.insert(texcoords.end(), mesh.texcoords.begin(), mesh.texcoords.end());
     } else {
       texcoords.insert(texcoords.end(), mesh.vertices.size(), make_float2(0.0f, 0.0f));
+    }
+    if (mesh.normals.size() == mesh.vertices.size()) {
+      any_normals = true;
+      normals.insert(normals.end(), mesh.normals.begin(), mesh.normals.end());
+    } else {
+      normals.insert(normals.end(), mesh.vertices.size(), make_float3(0.0f, 0.0f, 0.0f));
     }
     for (size_t i = 0; i < mesh.indices.size(); ++i) {
       const int3 idx = mesh.indices[i];
@@ -518,16 +526,21 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
 
   CudaBuffer<float3> d_vertices;
   CudaBuffer<float2> d_texcoords;
+  CudaBuffer<float3> d_normals;
   CudaBuffer<int3> d_indices;
   CudaBuffer<int> d_mat_ids;
   d_texcoords.upload(texcoords);
   d_mat_ids.upload(material_ids);
+  if (any_normals) {
+    d_normals.upload(normals);
+  }
 
   OptixTraversableHandle gas = impl_->build_gas(vertices, indices, d_vertices, d_indices);
 
   HitGroupData hit_data;
   hit_data.vertices = d_vertices.ptr;
   hit_data.texcoords = d_texcoords.ptr;
+  hit_data.normals = any_normals ? d_normals.ptr : nullptr;
   hit_data.indices = d_indices.ptr;
   hit_data.material_ids = d_mat_ids.ptr;
   impl_->build_sbt(hit_data);

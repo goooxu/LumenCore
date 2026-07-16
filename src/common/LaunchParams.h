@@ -105,6 +105,7 @@ struct LaunchParams {
 struct HitGroupData {
   float3 *vertices;
   float2 *texcoords;
+  float3 *normals; // may be null → use geometric face normals
   int3 *indices;
   int *material_ids;
 };

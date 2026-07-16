@@ -121,11 +121,24 @@ Mesh make_water_surface(const float3 &center, const float3 &half_extents_xz, flo
   const float hx = half_extents_xz.x;
   const float hz = half_extents_xz.z > 0.0f ? half_extents_xz.z : half_extents_xz.y;
 
+  // Gentle multi-frequency ripples (~1–2 cm peak). Analytic normals from dh/dx, dh/dz.
   auto wave_y = [&](float x, float z) {
     const float t = time;
-    return 0.085f * std::sin(2.3f * x + 1.1f * z + t * 1.7f) +
-           0.050f * std::sin(3.5f * z - 1.4f * x + t * 2.3f) +
-           0.028f * std::sin(5.2f * x + 4.1f * z - t * 1.1f);
+    return 0.018f * std::sin(2.1f * x + 1.3f * z + t * 1.4f) +
+           0.010f * std::sin(3.4f * z - 1.6f * x + t * 1.9f) +
+           0.005f * std::sin(5.5f * x + 4.2f * z - t * 0.9f);
+  };
+  auto wave_dydx = [&](float x, float z) {
+    const float t = time;
+    return 0.018f * 2.1f * std::cos(2.1f * x + 1.3f * z + t * 1.4f) +
+           0.010f * (-1.6f) * std::cos(3.4f * z - 1.6f * x + t * 1.9f) +
+           0.005f * 5.5f * std::cos(5.5f * x + 4.2f * z - t * 0.9f);
+  };
+  auto wave_dydz = [&](float x, float z) {
+    const float t = time;
+    return 0.018f * 1.3f * std::cos(2.1f * x + 1.3f * z + t * 1.4f) +
+           0.010f * 3.4f * std::cos(3.4f * z - 1.6f * x + t * 1.9f) +
+           0.005f * 4.2f * std::cos(5.5f * x + 4.2f * z - t * 0.9f);
   };
 
   for (int j = 0; j <= nz; ++j) {
@@ -137,6 +150,9 @@ Mesh make_water_surface(const float3 &center, const float3 &half_extents_xz, flo
       const float y = y_base + wave_y(x, z);
       mesh.vertices.push_back(make_float3(x, y, z));
       mesh.texcoords.push_back(make_float2(ux, vz));
+      // n = normalize(-dh/dx, 1, -dh/dz)
+      const float3 n = normalize(make_float3(-wave_dydx(x, z), 1.0f, -wave_dydz(x, z)));
+      mesh.normals.push_back(n);
     }
   }
 
@@ -173,6 +189,9 @@ Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose) {
   ensure_texcoords(out);
   for (float3 &v : out.vertices) {
     v = rotate_by_quat(v, pose.quat) + pose.position;
+  }
+  for (float3 &n : out.normals) {
+    n = normalize(rotate_by_quat(n, pose.quat));
   }
   return out;
 }

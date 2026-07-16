@@ -176,6 +176,16 @@ Mesh transform_mesh(const Mesh &input, const float3 &translate, const float3 &sc
     v = rotate(v);
     v = v + translate;
   }
+  if (out.normals.size() == out.vertices.size()) {
+    // Inverse-transpose of diagonal scale for normals (safe for uniform/non-uniform).
+    const float3 inv_s = make_float3(scale.x != 0.0f ? 1.0f / scale.x : 0.0f,
+                                     scale.y != 0.0f ? 1.0f / scale.y : 0.0f,
+                                     scale.z != 0.0f ? 1.0f / scale.z : 0.0f);
+    for (float3 &n : out.normals) {
+      n = make_float3(n.x * inv_s.x, n.y * inv_s.y, n.z * inv_s.z);
+      n = normalize(rotate(n));
+    }
+  }
   return out;
 }
 

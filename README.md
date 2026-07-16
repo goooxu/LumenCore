@@ -46,7 +46,7 @@ Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotligh
 
 ![Water Pool](outputs/water_pool.png)
 
-Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1.33 + Beer-Lambert absorption). The near wall is open toward the camera so the water plane reads clearly; **Sparky** and **Capsule Mascot** stand on the far deck as reflection subjects, with a submerged accent for refraction.
+Enclosed stone pool with a **calm procedural water surface** (`make_water_surface` heightfield + analytic normals, IOR 1.33 + Beer-Lambert absorption). **Sparky** and **Capsule Mascot** stand on the far deck as reflection subjects; a submerged accent shows refraction through the water.
 
 ---
 
@@ -62,7 +62,8 @@ Stone pool with a **procedural wavy water surface** (`make_water_surface`, IOR 1
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
 - Spot lights (`Scene.add_spot_light`)
 - Dielectric **Beer-Lambert absorption** (`Material.absorption`) for water / tinted glass
-- Procedural water surfaces (`make_water_surface`)
+- Procedural water surfaces (`make_water_surface` with analytic normals)
+- Optional mesh **vertex normals** for smooth shading
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 
