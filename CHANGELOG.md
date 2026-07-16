@@ -5,6 +5,19 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-16
+
+### Added
+
+- Mesh UV / texcoords, OBJ `vt` parsing, and albedo texture sampling in the path tracer
+- `Scene.add_texture`, `Material.albedo_tex`, bilinear GPU sampling in `closesthit`
+- Original **Sparky** cartoon robot (`scripts/gen_sparky.py` → `sparky.obj` + `sparky_albedo.png`)
+- Demo scene `python/scenes/sparky.py` and gallery render `outputs/sparky.png`
+
+### Removed
+
+- Yellow Buddy character assets and `yellow_buddy` scene (replaced by Sparky)
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
@@ -82,6 +95,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
 - Docker-based build/run helper for RTX GPUs
 
+[0.7.0]: https://github.com/goooxu/LumenCore/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/goooxu/LumenCore/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/goooxu/LumenCore/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/goooxu/LumenCore/compare/v0.3.2...v0.4.0

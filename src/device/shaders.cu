@@ -73,6 +73,57 @@ __forceinline__ __device__ float fresnel_schlick(float cos_theta, float f0) {
   return f0 + (1.0f - f0) * m2 * m2 * m;
 }
 
+__forceinline__ __device__ float3 sample_albedo_tex(const nrtx::TextureGPU &tex, float2 uv) {
+  if (!tex.pixels || tex.width <= 0 || tex.height <= 0) {
+    return make_float3(1.0f, 1.0f, 1.0f);
+  }
+  // Wrap
+  float u = uv.x - floorf(uv.x);
+  float v = uv.y - floorf(uv.y);
+  if (u < 0.0f) {
+    u += 1.0f;
+  }
+  if (v < 0.0f) {
+    v += 1.0f;
+  }
+  // OBJ/PNG often use top-left V; our atlas is authored bottom-up friendly — sample as-is.
+  const float x = u * static_cast<float>(tex.width) - 0.5f;
+  const float y = (1.0f - v) * static_cast<float>(tex.height) - 0.5f;
+  const int x0 = static_cast<int>(floorf(x));
+  const int y0 = static_cast<int>(floorf(y));
+  const float fx = x - static_cast<float>(x0);
+  const float fy = y - static_cast<float>(y0);
+
+  auto fetch = [&](int ix, int iy) -> float3 {
+    ix = (ix % tex.width + tex.width) % tex.width;
+    iy = (iy % tex.height + tex.height) % tex.height;
+    const uchar4 p = tex.pixels[iy * tex.width + ix];
+    return make_float3(p.x, p.y, p.z) * (1.0f / 255.0f);
+  };
+
+  const float3 c00 = fetch(x0, y0);
+  const float3 c10 = fetch(x0 + 1, y0);
+  const float3 c01 = fetch(x0, y0 + 1);
+  const float3 c11 = fetch(x0 + 1, y0 + 1);
+  const float3 c0 = nrtx::lerp(c00, c10, fx);
+  const float3 c1 = nrtx::lerp(c01, c11, fx);
+  return nrtx::lerp(c0, c1, fy);
+}
+
+__forceinline__ __device__ float3 shaded_base_color(const nrtx::MaterialGPU &mat,
+                                                   const nrtx::HitGroupData *hit_data,
+                                                   const int3 &index, const float2 &bary) {
+  float3 color = mat.base_color;
+  if (mat.albedo_tex >= 0 && mat.albedo_tex < params.texture_count && hit_data->texcoords) {
+    const float2 uv0 = hit_data->texcoords[index.x];
+    const float2 uv1 = hit_data->texcoords[index.y];
+    const float2 uv2 = hit_data->texcoords[index.z];
+    const float2 uv = (1.0f - bary.x - bary.y) * uv0 + bary.x * uv1 + bary.y * uv2;
+    color = color * sample_albedo_tex(params.textures[mat.albedo_tex], uv);
+  }
+  return color;
+}
+
 __forceinline__ __device__ float3 sample_quad_light(const nrtx::QuadLight &light, unsigned &seed,
                                                    float3 &pos, float3 &normal, float &pdf) {
   const float ru = nrtx::rnd(seed);
@@ -439,6 +490,7 @@ extern "C" __global__ void __closesthit__radiance() {
 
   const int mat_id = hit_data->material_ids[prim_idx];
   const nrtx::MaterialGPU mat = params.materials[mat_id];
+  const float3 base = shaded_base_color(mat, hit_data, index, bary);
 
   // Procedural flame volume: ray-march through the AABB proxy.
   if ((mat.flags & nrtx::MATERIAL_FLAG_VOLUME_FLAME) && mat.volume_index >= 0 &&
@@ -454,7 +506,7 @@ extern "C" __global__ void __closesthit__radiance() {
   }
 
   if (prd->first_hit) {
-    prd->albedo_aov = mat.base_color;
+    prd->albedo_aov = base;
     prd->normal_aov = n;
     prd->first_hit = 0;
   }
@@ -479,7 +531,7 @@ extern "C" __global__ void __closesthit__radiance() {
     if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
       if (!trace_shadow(p, to_light, dist)) {
         const float pdf = pdf_area * dist2 / (cos_light * params.light_count);
-        const float3 brdf = mat.base_color * (1.0f - mat.metallic) * (1.0f / 3.14159265f);
+        const float3 brdf = base * (1.0f - mat.metallic) * (1.0f / 3.14159265f);
         prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
       }
     }
@@ -515,13 +567,13 @@ extern "C" __global__ void __closesthit__radiance() {
       prd->done = 1;
       return;
     }
-    f = mat.base_color;
+    f = base;
     pdf = 1.0f;
   } else {
     wi = nrtx::cosine_sample_hemisphere(prd->seed, n);
     const float cos_theta = nrtx::dot(wi, n);
     pdf = cos_theta / 3.14159265f;
-    f = mat.base_color * (1.0f / 3.14159265f);
+    f = base * (1.0f / 3.14159265f);
     if (pdf < 1e-6f) {
       prd->done = 1;
       return;

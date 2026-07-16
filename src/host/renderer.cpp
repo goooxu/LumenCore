@@ -498,11 +498,17 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
 
   // Merge meshes into one GAS
   std::vector<float3> vertices;
+  std::vector<float2> texcoords;
   std::vector<int3> indices;
   std::vector<int> material_ids;
   for (const Mesh &mesh : scene.meshes) {
     const int base = static_cast<int>(vertices.size());
     vertices.insert(vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+    if (mesh.texcoords.size() == mesh.vertices.size()) {
+      texcoords.insert(texcoords.end(), mesh.texcoords.begin(), mesh.texcoords.end());
+    } else {
+      texcoords.insert(texcoords.end(), mesh.vertices.size(), make_float2(0.0f, 0.0f));
+    }
     for (size_t i = 0; i < mesh.indices.size(); ++i) {
       const int3 idx = mesh.indices[i];
       indices.push_back(make_int3(idx.x + base, idx.y + base, idx.z + base));
@@ -511,14 +517,17 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   }
 
   CudaBuffer<float3> d_vertices;
+  CudaBuffer<float2> d_texcoords;
   CudaBuffer<int3> d_indices;
   CudaBuffer<int> d_mat_ids;
+  d_texcoords.upload(texcoords);
   d_mat_ids.upload(material_ids);
 
   OptixTraversableHandle gas = impl_->build_gas(vertices, indices, d_vertices, d_indices);
 
   HitGroupData hit_data;
   hit_data.vertices = d_vertices.ptr;
+  hit_data.texcoords = d_texcoords.ptr;
   hit_data.indices = d_indices.ptr;
   hit_data.material_ids = d_mat_ids.ptr;
   impl_->build_sbt(hit_data);
@@ -534,9 +543,32 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     materials_gpu[i].emission = m.emission;
     materials_gpu[i].flags = m.flags;
     materials_gpu[i].volume_index = m.volume_index;
+    materials_gpu[i].albedo_tex = m.albedo_tex;
+    materials_gpu[i].pad = 0;
   }
   CudaBuffer<MaterialGPU> d_materials;
   d_materials.upload(materials_gpu);
+
+  // Upload albedo textures (RGBA8 → uchar4)
+  std::vector<CudaBuffer<uchar4>> d_tex_pixels(scene.textures.size());
+  std::vector<TextureGPU> textures_gpu(scene.textures.size());
+  for (size_t i = 0; i < scene.textures.size(); ++i) {
+    const Texture2D &tex = scene.textures[i];
+    std::vector<uchar4> pixels(static_cast<size_t>(tex.width) * tex.height);
+    for (size_t p = 0; p < pixels.size(); ++p) {
+      pixels[p] = make_uchar4(tex.rgba[p * 4 + 0], tex.rgba[p * 4 + 1], tex.rgba[p * 4 + 2],
+                              tex.rgba[p * 4 + 3]);
+    }
+    d_tex_pixels[i].upload(pixels);
+    textures_gpu[i].pixels = d_tex_pixels[i].ptr;
+    textures_gpu[i].width = tex.width;
+    textures_gpu[i].height = tex.height;
+    textures_gpu[i].pad = 0;
+  }
+  CudaBuffer<TextureGPU> d_textures;
+  if (!textures_gpu.empty()) {
+    d_textures.upload(textures_gpu);
+  }
 
   CudaBuffer<QuadLight> d_lights;
   if (!scene.lights.empty()) {
@@ -583,6 +615,8 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   lp.light_count = static_cast<int>(scene.lights.size());
   lp.volumes = d_volumes.ptr;
   lp.volume_count = static_cast<int>(scene.volumes.size());
+  lp.textures = d_textures.ptr;
+  lp.texture_count = static_cast<int>(textures_gpu.size());
   lp.background_top = scene.background_top;
   lp.background_bottom = scene.background_bottom;
   lp.enable_nee = config.enable_nee ? 1 : 0;

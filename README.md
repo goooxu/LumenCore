@@ -36,11 +36,11 @@ Material chart of diffuse, metal, and glass spheres under an area light. Useful 
 
 Open ground scene with chrome and glass props, soft sunlight, and a gradient environment. Includes a light depth-of-field camera.
 
-### Yellow Buddy (OBJ character)
+### Sparky (textured robot)
 
-![Yellow Buddy](outputs/yellow_buddy.png)
+![Sparky](outputs/sparky.png)
 
-Studio portrait of **Yellow Buddy**, an original capsule character loaded from Wavefront OBJ (`assets/models/yellow_buddy.obj`, ~17k triangles with sculpted body, straps, arms, and boots). Multi-material `usemtl` groups drive yellow body, blue overalls, metal goggles, glass lens, and boots. Inspired by the familiar “yellow helper” silhouette; not affiliated with any trademarked property.
+Studio portrait of **Sparky**, an original cartoon robot (~9k triangles) with cream shell, cyan armor accents, glowing visor eyes, and a single **albedo atlas** (`assets/models/sparky.obj` + `sparky_albedo.png`). Demonstrates OBJ UV import and texture sampling in the path tracer.
 
 ---
 
@@ -52,7 +52,8 @@ Studio portrait of **Yellow Buddy**, an original capsule character loaded from W
 - Unidirectional path tracing + Next Event Estimation (quad area lights)
 - Russian Roulette; diffuse / metal / glass materials
 - Triangle-mesh GAS on OptiX RT Cores
-- Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map)
+- Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
+- Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 
@@ -80,7 +81,7 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/outdoor_env.py /results/outdoor_env.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/yellow_buddy.py /results/yellow_buddy.png 256 1'
+./docker/run.sh 'python3 /work/python/scenes/sparky.py /results/sparky.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.png 128 1 1'
 ./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.png 256 1'
 ```
@@ -115,12 +116,13 @@ lc.Renderer().render(scene, cam, cfg)
 | Path | Role |
 |------|------|
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, yellow_buddy, physx_collapse, fireplace) |
+| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ loader, denoiser, PNG I/O |
 | `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` |
-| `assets/models` | Character OBJ / MTL |
+| `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |
+| `assets/models` | Character OBJ / MTL / textures |
 | `outputs/` | Sample renders from RTX 5090 |
 
 ## Performance (RTX 5090, denoised)
@@ -130,10 +132,10 @@ lc.Renderer().render(scene, cam, cfg)
 | cornell | 2048×2048 | ~1.51 s @ 256 spp |
 | materials_ball | 2560×1440 | ~0.50 s @ 256 spp |
 | outdoor_env | 2560×1440 | ~0.43 s @ 256 spp |
-| yellow_buddy | 2560×1440 | ~0.73 s @ 256 spp |
+| sparky | 2560×1440 | ~0.77 s @ 256 spp (textured) |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
 | fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
 
 ## License
 
-Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). Yellow Buddy is an original asset bundled with this repository.
+Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). Sparky is an original asset bundled with this repository.

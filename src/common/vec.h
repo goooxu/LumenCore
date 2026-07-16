@@ -32,6 +32,9 @@ __forceinline__ __host__ __device__ float2 operator*(const float2 &a, float s) {
 __forceinline__ __host__ __device__ float2 operator*(float s, const float2 &a) {
   return a * s;
 }
+__forceinline__ __host__ __device__ float2 operator+(const float2 &a, const float2 &b) {
+  return make_float2(a.x + b.x, a.y + b.y);
+}
 __forceinline__ __host__ __device__ float3 operator/(const float3 &a, float s) {
   return make_float3(a.x / s, a.y / s, a.z / s);
 }

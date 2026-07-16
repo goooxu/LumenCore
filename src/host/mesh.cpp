@@ -3,11 +3,41 @@
 #include <cmath>
 #include <stdexcept>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 namespace nrtx {
+
+int Scene::add_texture(const std::string &path) {
+  int w = 0, h = 0, comp = 0;
+  unsigned char *data = stbi_load(path.c_str(), &w, &h, &comp, 4);
+  if (!data || w <= 0 || h <= 0) {
+    throw std::runtime_error("Failed to load texture: " + path);
+  }
+  Texture2D tex;
+  tex.width = w;
+  tex.height = h;
+  tex.rgba.assign(data, data + static_cast<size_t>(w) * h * 4);
+  stbi_image_free(data);
+  textures.push_back(std::move(tex));
+  return static_cast<int>(textures.size() - 1);
+}
+
+namespace {
+
+void ensure_texcoords(Mesh &mesh) {
+  if (mesh.texcoords.size() == mesh.vertices.size()) {
+    return;
+  }
+  mesh.texcoords.assign(mesh.vertices.size(), make_float2(0.0f, 0.0f));
+}
+
+} // namespace
 
 Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int material_id) {
   Mesh mesh;
   mesh.vertices = {corner, corner + u, corner + u + v, corner + v};
+  mesh.texcoords = {make_float2(0, 0), make_float2(1, 0), make_float2(1, 1), make_float2(0, 1)};
   mesh.indices = {make_int3(0, 1, 2), make_int3(0, 2, 3)};
   mesh.material_ids = {material_id, material_id};
   return mesh;
@@ -30,6 +60,10 @@ Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id) {
     mesh.vertices.push_back(b);
     mesh.vertices.push_back(c);
     mesh.vertices.push_back(d);
+    mesh.texcoords.push_back(make_float2(0, 0));
+    mesh.texcoords.push_back(make_float2(1, 0));
+    mesh.texcoords.push_back(make_float2(1, 1));
+    mesh.texcoords.push_back(make_float2(0, 1));
     mesh.indices.push_back(make_int3(base, base + 1, base + 2));
     mesh.indices.push_back(make_int3(base, base + 2, base + 3));
     mesh.material_ids.push_back(material_id);
@@ -57,6 +91,7 @@ Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int sli
       const float y = std::cos(phi);
       const float z = std::sin(phi) * std::sin(theta);
       mesh.vertices.push_back(center + make_float3(x, y, z) * radius);
+      mesh.texcoords.push_back(make_float2(u, v));
     }
   }
   for (int i = 0; i < stacks; ++i) {
@@ -77,7 +112,6 @@ Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int sli
 namespace {
 
 float3 rotate_by_quat(const float3 &v, const float4 &q) {
-  // q = (x, y, z, w); v' = q * v * q^{-1}
   const float3 u = make_float3(q.x, q.y, q.z);
   const float s = q.w;
   const float3 t = cross(u, v) * 2.0f;
@@ -88,6 +122,7 @@ float3 rotate_by_quat(const float3 &v, const float4 &q) {
 
 Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose) {
   Mesh out = input;
+  ensure_texcoords(out);
   for (float3 &v : out.vertices) {
     v = rotate_by_quat(v, pose.quat) + pose.position;
   }

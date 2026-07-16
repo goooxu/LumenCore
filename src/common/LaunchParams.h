@@ -25,7 +25,16 @@ struct MaterialGPU {
   float ior;
   float3 emission;
   int flags;
-  int volume_index; // valid when flags & MATERIAL_FLAG_VOLUME_FLAME
+  int volume_index;
+  int albedo_tex; // -1 = none
+  int pad;
+};
+
+struct TextureGPU {
+  uchar4 *pixels;
+  int width;
+  int height;
+  int pad;
 };
 
 struct QuadLight {
@@ -74,6 +83,8 @@ struct LaunchParams {
   int light_count;
   FlameVolume *volumes;
   int volume_count;
+  TextureGPU *textures;
+  int texture_count;
   float3 background_top;
   float3 background_bottom;
   int enable_nee;
@@ -81,6 +92,7 @@ struct LaunchParams {
 
 struct HitGroupData {
   float3 *vertices;
+  float2 *texcoords;
   int3 *indices;
   int *material_ids;
 };

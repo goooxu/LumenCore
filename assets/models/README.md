@@ -1,5 +1,9 @@
 # Models
 
-- `yellow_buddy.obj` / `yellow_buddy.mtl` — original “Yellow Buddy” character (~17k triangles): sculpted capsule body, overall straps/pockets, bent arms with gloves, boots, and layered goggles.
+- `sparky.obj` / `sparky.mtl` / `sparky_albedo.png` — original **Sparky** cartoon robot (~9k triangles): rounded head, capsule torso, short limbs, antenna; cream shell with cyan accents and glowing eyes on a single albedo atlas.
 
-The silhouette is intentionally reminiscent of a yellow helper character, but the mesh and materials are original and not affiliated with any trademarked property.
+Regenerate with:
+
+```bash
+python3 scripts/gen_sparky.py
+```

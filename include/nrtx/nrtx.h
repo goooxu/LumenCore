@@ -13,8 +13,15 @@ namespace nrtx {
 
 struct Mesh {
   std::vector<float3> vertices;
+  std::vector<float2> texcoords; // parallel to vertices (may be empty → treated as 0,0)
   std::vector<int3> indices;
   std::vector<int> material_ids;
+};
+
+struct Texture2D {
+  int width = 0;
+  int height = 0;
+  std::vector<unsigned char> rgba; // width * height * 4
 };
 
 struct Material {
@@ -26,6 +33,7 @@ struct Material {
   float3 emission = make_float3(0.0f, 0.0f, 0.0f);
   int flags = MATERIAL_FLAG_NONE;
   int volume_index = -1;
+  int albedo_tex = -1; // index into Scene::textures, -1 = solid base_color
 };
 
 struct Camera {
@@ -41,6 +49,7 @@ struct Camera {
 struct Scene {
   std::vector<Mesh> meshes;
   std::vector<Material> materials;
+  std::vector<Texture2D> textures;
   std::vector<QuadLight> lights;
   std::vector<FlameVolume> volumes;
   float3 background_top = make_float3(0.6f, 0.7f, 0.9f);
@@ -50,6 +59,8 @@ struct Scene {
     materials.push_back(m);
     return static_cast<int>(materials.size() - 1);
   }
+
+  int add_texture(const std::string &path);
 
   void add_mesh(Mesh mesh) { meshes.push_back(std::move(mesh)); }
 
@@ -66,7 +77,6 @@ struct Scene {
     lights.push_back(light);
   }
 
-  // Procedural flame volume: proxy AABB mesh + optional NEE face light at the fire core.
   int add_flame_volume(const float3 &center, const float3 &half_extents,
                        const float3 &emission_scale = make_float3(120.0f, 48.0f, 8.0f),
                        float density_scale = 2.8f, float absorption = 2.0f,
@@ -99,13 +109,11 @@ private:
   std::unique_ptr<Impl> impl_;
 };
 
-// Procedural mesh helpers
 Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int material_id);
 Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id);
 Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int slices = 48,
                     int stacks = 24);
 
-// Wavefront OBJ loader (triangles / fan-tessellated polygons; optional usemtl)
 Mesh load_obj(const std::string &path, int default_material_id);
 Mesh load_obj(const std::string &path,
               const std::unordered_map<std::string, int> &materials_by_name,
@@ -114,13 +122,8 @@ Mesh load_obj(const std::string &path,
 Mesh transform_mesh(const Mesh &input, const float3 &translate, const float3 &scale,
                     const float3 &rotate_xyz_radians = make_float3(0.0f, 0.0f, 0.0f));
 
-// Apply a rigid Pose (quaternion + translation) to mesh vertices (local → world).
 Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose);
-
-// Axis-aligned box centered at origin with the given half-extents, then posed.
 Mesh apply_pose_to_box_mesh(const float3 &half_extents, const Pose &pose, int material_id);
-
-// UV sphere centered at origin, then posed.
 Mesh apply_pose_to_sphere_mesh(float radius, const Pose &pose, int material_id, int slices = 32,
                                int stacks = 16);
 
