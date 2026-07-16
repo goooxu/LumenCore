@@ -10,6 +10,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ### Changed
 
 - PhysX Collapse: larger **glass fireball** (procedural flame volume inside), darker studio lighting, and brick-sized **Sparky / Capsule Mascot** mixed into the tower
+- PhysX Collapse homepage hero uses `frame_0010`
+- Fireplace: stage Sparky / Capsule mascots with plastic, chrome, yellow, and glass material variants
 
 ## [0.10.0] - 2026-07-16
 

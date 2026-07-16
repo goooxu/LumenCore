@@ -16,7 +16,7 @@ Metal roughness row + metallic color row under an importance-sampled **HDRI** (`
 
 ![Fireplace](outputs/fireplace.png)
 
-Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. Shows volume look, soft fire lighting on wood/stone, and metal reflections of the flame.
+Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. **Sparky** and **Capsule Mascot** sit by the fire in plastic / chrome / yellow / glass material variants.
 
 ### PhysX Collapse
 

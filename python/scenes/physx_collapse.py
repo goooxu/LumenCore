@@ -339,7 +339,7 @@ def main() -> int:
 
     sim_steps = 180
     frame_every = 15
-    hero_step = 60  # default homepage candidate; replace outputs/physx_collapse.png after picking
+    hero_step = 150  # frame_0010 — homepage pick
     renderer = lc.Renderer()
     frame_paths: list[Path] = []
 
