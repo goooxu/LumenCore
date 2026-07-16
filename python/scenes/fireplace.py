@@ -75,10 +75,10 @@ def main() -> int:
         )
     )
 
-    # Props lit by the fire
-    scene.add_mesh(lc.make_uv_sphere((-1.15, 0.22, -0.55), 0.22, pottery, 40, 20))
-    scene.add_mesh(lc.make_box((1.05, 0.0, -0.35), (1.45, 0.55, 0.05), metal))
-    scene.add_mesh(lc.make_uv_sphere((1.25, 0.72, -0.15), 0.18, metal, 36, 18))
+    # Props lit by the fire (rear corners — clear of foreground mascots)
+    scene.add_mesh(lc.make_uv_sphere((-1.85, 0.22, -1.55), 0.20, pottery, 40, 20))
+    scene.add_mesh(lc.make_box((1.25, 0.0, -0.85), (1.65, 0.55, -0.45), metal))
+    scene.add_mesh(lc.make_uv_sphere((1.45, 0.72, -0.65), 0.18, metal, 36, 18))
     scene.add_mesh(lc.make_box((-0.40, 0.18, -1.40), (-0.34, 0.42, -1.34), metal))
     scene.add_mesh(lc.make_box((0.34, 0.18, -1.40), (0.40, 0.42, -1.34), metal))
 
@@ -229,31 +229,31 @@ def main() -> int:
     sparky_path = resolve_asset("assets/models/sparky.obj")
     mascot_path = resolve_asset("assets/models/capsule_mascot.obj")
 
-    # Floor-left: plastic Sparky facing the fire
+    # Floor-left foreground: plastic Sparky (clear of pottery ball)
     sparky_plastic_mesh = lc.load_obj(sparky_path, sparky_plastic, plastic_white)
     sparky_plastic_mesh = lc.transform_mesh(
-        sparky_plastic_mesh, (-0.95, 0.0, -0.55), (0.38, 0.38, 0.38), (0.0, 0.55, 0.0)
+        sparky_plastic_mesh, (-0.95, 0.0, 0.45), (0.38, 0.38, 0.38), (0.0, 0.35, 0.0)
     )
     scene.add_mesh(sparky_plastic_mesh)
 
-    # Floor-right: chrome Sparky
+    # Floor-right foreground: chrome Sparky (clear of metal pedestal / gold ball)
     sparky_chrome_mesh = lc.load_obj(sparky_path, sparky_chrome, chrome)
     sparky_chrome_mesh = lc.transform_mesh(
-        sparky_chrome_mesh, (0.95, 0.0, -0.45), (0.36, 0.36, 0.36), (0.0, -0.65, 0.0)
+        sparky_chrome_mesh, (0.35, 0.0, 0.55), (0.36, 0.36, 0.36), (0.0, -0.4, 0.0)
     )
     scene.add_mesh(sparky_chrome_mesh)
 
-    # Hearth-left: yellow Capsule (closer to fire)
+    # Hearth-left: yellow Capsule (on stone slab, clear of andirons)
     mascot_y = lc.load_obj(mascot_path, mascot_yellow, yellow)
     mascot_y = lc.transform_mesh(
-        mascot_y, (-0.55, 0.12, -1.05), (0.28, 0.28, 0.28), (0.0, 0.35, 0.0)
+        mascot_y, (-0.42, 0.12, -1.00), (0.26, 0.26, 0.26), (0.0, 0.4, 0.0)
     )
     scene.add_mesh(mascot_y)
 
     # Mantel-right: glass Capsule catching firelight
     mascot_g = lc.load_obj(mascot_path, mascot_glass, glass_body)
     mascot_g = lc.transform_mesh(
-        mascot_g, (0.55, 1.48, -1.55), (0.22, 0.22, 0.22), (0.0, -0.4, 0.0)
+        mascot_g, (0.62, 1.48, -1.50), (0.22, 0.22, 0.22), (0.0, -0.35, 0.0)
     )
     scene.add_mesh(mascot_g)
 
