@@ -6,6 +6,12 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Gallery
 
+### Fireplace (volumetric flame)
+
+![Fireplace](outputs/fireplace.png)
+
+Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. Shows volume look, soft fire lighting on wood/stone, and metal reflections of the flame.
+
 ### PhysX Collapse
 
 ![PhysX Collapse](outputs/physx_collapse.png)
@@ -41,6 +47,7 @@ Studio portrait of **Yellow Buddy**, an original capsule character loaded from W
 ## Features
 
 - **PhysX 5 + OptiX 9** — simulate with PhysX, image with OptiX (`PhysXWorld` → poses → meshes → path tracer)
+- **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
 - Unidirectional path tracing + Next Event Estimation (quad area lights)
 - Russian Roulette; diffuse / metal / glass materials
@@ -75,32 +82,32 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/outdoor_env.py /results/outdoor_env.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/yellow_buddy.py /results/yellow_buddy.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.png 128 1 1'
+./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.png 256 1'
 ```
 
 CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
 
 `physx_collapse` extra arg: `[prefer_gpu=1|0]` — writes a frame sequence under `<out_stem>/` plus a gallery hero PNG.
 
+`fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
+
 Example API usage:
 
 ```python
 import lumencore as lc
 
-# OptiX path trace
 scene = lc.Scene()
 mat = scene.add_material(lc.Material(base_color=(0.8, 0.8, 0.8), roughness=0.5))
 scene.add_mesh(lc.make_quad((0, 0, 0), (1, 0, 0), (0, 0, 1), mat))
+scene.add_flame_volume(
+    center=(0.5, 0.4, 0.5),
+    half_extents=(0.2, 0.4, 0.15),
+    emission_scale=(40, 16, 3),
+    time=1.5,
+)
 cam = lc.Camera(eye=(0.5, 0.5, -1.35), lookat=(0.5, 0.5, 0.5), fov_y_deg=40, aspect=1.0)
 cfg = lc.RenderConfig(width=2048, height=2048, spp=64, denoise=True, output_path="out.png")
 lc.Renderer().render(scene, cam, cfg)
-
-# PhysX → mesh pose sync
-world = lc.PhysXWorld()
-world.init(prefer_gpu=True)
-box = world.add_dynamic_box((0.2, 0.2, 0.2), 1.0, lc.Pose(position=(0, 2, 0)))
-world.step(1.0 / 60.0)
-pose = world.get_pose(box)
-mesh = lc.apply_pose_to_box_mesh((0.2, 0.2, 0.2), pose, mat)
 ```
 
 ## Layout
@@ -108,7 +115,7 @@ mesh = lc.apply_pose_to_box_mesh((0.2, 0.2, 0.2), pose, mat)
 | Path | Role |
 |------|------|
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, yellow_buddy, physx_collapse) |
+| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, yellow_buddy, physx_collapse, fireplace) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ loader, denoiser, PNG I/O |
@@ -125,6 +132,7 @@ mesh = lc.apply_pose_to_box_mesh((0.2, 0.2, 0.2), pose, mat)
 | outdoor_env | 2560×1440 | ~0.43 s @ 256 spp |
 | yellow_buddy | 2560×1440 | ~0.73 s @ 256 spp |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
+| fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
 
 ## License
 
