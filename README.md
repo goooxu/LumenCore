@@ -46,7 +46,7 @@ Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotligh
 
 ![Water Pool](outputs/water_pool.png)
 
-Enclosed stone pool with a **calm procedural water surface** (`make_water_surface` heightfield + analytic normals, IOR 1.33 + Beer-Lambert absorption). **Sparky** and **Capsule Mascot** stand on the far deck as reflection subjects; a submerged accent shows refraction through the water.
+Open deep water with a **calm procedural surface** (`make_water_surface` + analytic normals, IOR 1.33 + Beer-Lambert absorption over ~4 m depth). **Sparky** and **Capsule Mascot** stand on a wooden pier; submerged rocks cue depth and refraction.
 
 ---
 
@@ -148,7 +148,7 @@ lc.Renderer().render(scene, cam, cfg)
 | sparky | 2560×1440 | Sparky + Capsule Mascot duo |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
 | fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
-| water_pool | 2560×1440 | wavy water + Beer-Lambert absorption |
+| water_pool | 2560×1440 | open deep water + pier; Beer-Lambert depth |
 
 ## License
 
