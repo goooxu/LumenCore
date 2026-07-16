@@ -6,6 +6,12 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Gallery
 
+### GGX Studio (HDRI + roughness)
+
+![GGX Studio](outputs/ggx_studio.png)
+
+Metal roughness row + metallic color row under an importance-sampled **HDRI** (`Scene.load_env_map`) with GGX microfacet BRDF and balance MIS. Glass sphere keeps the ideal dielectric path for reference.
+
 ### Fireplace (volumetric flame)
 
 ![Fireplace](outputs/fireplace.png)
@@ -28,13 +34,13 @@ Classic enclosed room with red / green walls, a glass sphere, a metal sphere, an
 
 ![Materials Ball](outputs/materials_ball.png)
 
-Material chart of diffuse, metal, and glass spheres under an area light. Useful for checking roughness / metallic / transmission response of the simplified PBR model.
+Material chart of diffuse, metal, and glass spheres under studio **HDRI** plus a soft area fill. Useful for checking roughness / metallic / transmission with the GGX PBR model.
 
 ### Outdoor Env
 
 ![Outdoor Env](outputs/outdoor_env.png)
 
-Open ground scene with chrome and glass props, soft sunlight, and a gradient environment. Includes a light depth-of-field camera.
+Open ground scene with chrome and glass props lit primarily by HDRI, soft fill light, and light depth-of-field.
 
 ### Sparky + Capsule Mascot
 
@@ -55,8 +61,9 @@ Open deep water with a **calm procedural surface** (`make_water_surface` + analy
 - **PhysX 5 + OptiX 9** — GPU PhysX rigid bodies (required) + OptiX path tracing (`PhysXWorld` → poses → meshes → path tracer)
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
-- Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights)
-- Russian Roulette; diffuse / metal / glass materials
+- Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights + HDRI)
+- Russian Roulette; **GGX** opaque materials + ideal glass
+- **HDRI env maps** (`Scene.load_env_map`) with CDF importance sampling and balance MIS
 - Triangle-mesh GAS on OptiX RT Cores
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
@@ -88,6 +95,7 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
 
 # Render scenes (PYTHONPATH is set by docker/run.sh)
+./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/outdoor_env.py /results/outdoor_env.png 256 1'
@@ -129,22 +137,25 @@ lc.Renderer().render(scene, cam, cfg)
 | Path | Role |
 |------|------|
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace, water_pool) |
+| `python/scenes/` | Scene scripts (ggx_studio, cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace, water_pool) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
-| `src/host` | Context, GAS, PhysX wrapper, OBJ loader, denoiser, PNG I/O |
+| `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, PNG I/O |
 | `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` |
 | `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |
+| `scripts/gen_studio_hdr.py` | Procedural studio Radiance HDR |
 | `assets/models` | Character OBJ / MTL / textures |
+| `assets/env` | HDRI environment maps |
 | `outputs/` | Sample renders from RTX 5090 |
 
 ## Performance (RTX 5090, denoised)
 
 | Scene | Resolution | Notes |
 |-------|------------|-------|
+| ggx_studio | 2560×1440 | HDRI + GGX roughness / metallic showcase |
 | cornell | 2048×2048 | ~1.51 s @ 256 spp |
-| materials_ball | 2560×1440 | ~0.50 s @ 256 spp |
-| outdoor_env | 2560×1440 | ~0.43 s @ 256 spp |
+| materials_ball | 2560×1440 | HDRI-lit material chart |
+| outdoor_env | 2560×1440 | HDRI + soft fill |
 | sparky | 2560×1440 | Sparky + Capsule Mascot duo |
 | physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
 | fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |

@@ -5,6 +5,22 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-07-16
+
+### Added
+
+- **GGX microfacet** opaque BRDF (metallic-roughness) with VNDF sampling in the path tracer
+- **Balance MIS** between BSDF sampling and next-event estimation (area lights, spots, HDRI)
+- **HDRI environment maps**: `Scene.load_env_map` / `clear_env_map` (Radiance `.hdr` via stb), equirect miss + luminance CDF importance sampling
+- Studio env asset `assets/env/studio.hdr` (`scripts/gen_studio_hdr.py`)
+- Showcase scene `python/scenes/ggx_studio.py` + gallery `outputs/ggx_studio.png`
+- `make_uv_sphere` now writes smooth vertex normals
+
+### Changed
+
+- Opaque shading path uses GGX eval/sample (glass remains ideal dielectric)
+- `materials_ball` and `outdoor_env` load the studio HDRI as primary lighting
+
 ## [0.9.1] - 2026-07-16
 
 ### Changed

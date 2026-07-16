@@ -169,6 +169,8 @@ PYBIND11_MODULE(lumencore, m) {
       .def(py::init<>())
       .def("add_material", &Scene::add_material, py::arg("material"))
       .def("add_texture", &Scene::add_texture, py::arg("path"))
+      .def("load_env_map", &Scene::load_env_map, py::arg("path"))
+      .def("clear_env_map", &Scene::clear_env_map)
       .def("add_mesh", [](Scene &s, Mesh mesh) { s.add_mesh(std::move(mesh)); }, py::arg("mesh"))
       .def(
           "add_quad_light",

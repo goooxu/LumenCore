@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LaunchParams.h"
+#include "nrtx/env_map.h"
 #include "nrtx/physx_world.h"
 #include "vec.h"
 
@@ -57,6 +58,7 @@ struct Scene {
   std::vector<FlameVolume> volumes;
   float3 background_top = make_float3(0.6f, 0.7f, 0.9f);
   float3 background_bottom = make_float3(0.15f, 0.15f, 0.2f);
+  EnvMap env_map;
 
   int add_material(const Material &m) {
     materials.push_back(m);
@@ -64,6 +66,10 @@ struct Scene {
   }
 
   int add_texture(const std::string &path);
+
+  void load_env_map(const std::string &path) { env_map = load_env_map_hdr(path); }
+
+  void clear_env_map() { env_map.clear(); }
 
   void add_mesh(Mesh mesh) { meshes.push_back(std::move(mesh)); }
 

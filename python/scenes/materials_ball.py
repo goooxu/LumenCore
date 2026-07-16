@@ -2,9 +2,30 @@
 """Materials chart scene for LumenCore."""
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
 
 import lumencore as lc
+
+
+def resolve_asset(relative: str) -> str:
+    candidates = []
+    root = os.environ.get("LUMENCORE_ROOT")
+    if root:
+        candidates.append(str(Path(root) / relative))
+    candidates.extend(
+        [
+            relative,
+            str(Path("..") / relative),
+            str(Path("../..") / relative),
+            str(Path("/work") / relative),
+        ]
+    )
+    for path in candidates:
+        if Path(path).is_file():
+            return path
+    return candidates[0]
 
 
 def main() -> int:
@@ -13,6 +34,7 @@ def main() -> int:
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 
     scene = lc.Scene()
+    scene.load_env_map(resolve_asset("assets/env/studio.hdr"))
     ground = scene.add_material(lc.Material(base_color=(0.25, 0.25, 0.28), roughness=0.9))
     scene.add_mesh(lc.make_quad((-4, 0, -4), (8, 0, 0), (0, 0, 8), ground))
 
@@ -45,15 +67,16 @@ def main() -> int:
             scene.add_mesh(lc.make_uv_sphere((x, 0.35, z), 0.32, mid))
             idx += 1
 
+    # Soft fill; HDRI is the primary illumination
     light_corner = (-1.0, 3.5, -1.0)
     light_u = (2.0, 0, 0)
     light_v = (0, 0, 2.0)
-    light_mat = scene.add_material(lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(20, 18, 14)))
+    light_mat = scene.add_material(lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(6, 5.5, 4.5)))
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (20, 18, 14))
+    scene.add_quad_light(light_corner, light_u, light_v, (6, 5.5, 4.5))
 
-    scene.background_top = (0.55, 0.65, 0.85)
-    scene.background_bottom = (0.2, 0.2, 0.25)
+    scene.background_top = (0.08, 0.09, 0.11)
+    scene.background_bottom = (0.03, 0.03, 0.04)
 
     camera = lc.Camera(eye=(0.0, 2.2, 4.5), lookat=(0.0, 0.4, 0.3), fov_y_deg=35, aspect=16 / 9)
     cfg = lc.RenderConfig(width=2560, height=1440, spp=spp, denoise=denoise, output_path=out)

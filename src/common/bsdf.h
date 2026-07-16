@@ -1,0 +1,155 @@
+#pragma once
+
+#include "sampling.h"
+#include "vec.h"
+
+#include <cuda_runtime.h>
+
+namespace nrtx {
+
+__forceinline__ __host__ __device__ float saturatef(float x) {
+  return fminf(1.0f, fmaxf(0.0f, x));
+}
+
+__forceinline__ __host__ __device__ float3 fresnel_schlick3(float cos_theta, const float3 &f0) {
+  const float m = 1.0f - cos_theta;
+  const float m2 = m * m;
+  const float w = m2 * m2 * m;
+  return f0 + (make_float3(1.0f, 1.0f, 1.0f) - f0) * w;
+}
+
+__forceinline__ __host__ __device__ float ggx_d(float n_dot_h, float a2) {
+  const float d = n_dot_h * n_dot_h * (a2 - 1.0f) + 1.0f;
+  return a2 / (3.14159265f * d * d);
+}
+
+__forceinline__ __host__ __device__ float smith_g1_ggx(float n_dot_x, float a) {
+  const float k = a * 0.5f;
+  return n_dot_x / (n_dot_x * (1.0f - k) + k);
+}
+
+__forceinline__ __host__ __device__ float smith_g_ggx(float n_dot_v, float n_dot_l, float a) {
+  return smith_g1_ggx(n_dot_v, a) * smith_g1_ggx(n_dot_l, a);
+}
+
+// Evaluate opaque metallic-roughness BRDF. Returns f (not f*cos). Sets pdf_out.
+__forceinline__ __host__ __device__ float3 eval_opaque_bsdf(const float3 &base_color, float metallic,
+                                                           float roughness, const float3 &n,
+                                                           const float3 &wo, const float3 &wi,
+                                                           float &pdf_out) {
+  pdf_out = 0.0f;
+  const float n_dot_l = dot(n, wi);
+  const float n_dot_v = dot(n, wo);
+  if (n_dot_l <= 0.0f || n_dot_v <= 0.0f) {
+    return make_float3(0.0f, 0.0f, 0.0f);
+  }
+
+  const float3 h = normalize(wo + wi);
+  const float n_dot_h = fmaxf(dot(n, h), 0.0f);
+  const float v_dot_h = fmaxf(dot(wo, h), 0.0f);
+
+  const float a = fmaxf(roughness, 0.045f);
+  const float a2 = a * a;
+
+  const float3 f0 = lerp(make_float3(0.04f, 0.04f, 0.04f), base_color, metallic);
+  const float3 F = fresnel_schlick3(v_dot_h, f0);
+  const float D = ggx_d(n_dot_h, a2);
+  const float G = smith_g_ggx(n_dot_v, n_dot_l, a);
+
+  const float3 spec = F * (D * G / fmaxf(4.0f * n_dot_v * n_dot_l, 1e-6f));
+  const float f_avg = (F.x + F.y + F.z) * (1.0f / 3.0f);
+  const float3 brdf =
+      base_color * ((1.0f - metallic) * (1.0f - f_avg) * (1.0f / 3.14159265f)) + spec;
+
+  const float pdf_h = D * n_dot_h;
+  const float pdf_spec = pdf_h / fmaxf(4.0f * v_dot_h, 1e-6f);
+  const float pdf_diff = n_dot_l * (1.0f / 3.14159265f);
+
+  const float w_spec = saturatef(metallic + (1.0f - metallic) * f_avg);
+  const float w_diff = 1.0f - w_spec;
+  pdf_out = w_diff * pdf_diff + w_spec * pdf_spec;
+  return brdf;
+}
+
+__forceinline__ __host__ __device__ float3 sample_ggx_vndf(unsigned &seed, const float3 &n,
+                                                          const float3 &wo, float roughness) {
+  const float a = fmaxf(roughness, 0.045f);
+  float3 t, b;
+  orthonormal_basis(n, t, b);
+  const float3 wo_l = make_float3(dot(wo, t), dot(wo, b), dot(wo, n));
+  float3 v = normalize(make_float3(a * wo_l.x, a * wo_l.y, wo_l.z));
+  if (v.z < 0.0f) {
+    v = -v;
+  }
+  float3 t1, t2;
+  orthonormal_basis(v, t1, t2);
+  const float r1 = rnd(seed);
+  const float r2 = rnd(seed);
+  const float phi = 2.0f * 3.14159265f * r1;
+  const float z = 1.0f - r2;
+  const float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - z * z));
+  float3 h = t1 * (cosf(phi) * sin_theta) + t2 * (sinf(phi) * sin_theta) + v * z;
+  if (h.z < 0.0f) {
+    h = -h;
+  }
+  h = normalize(make_float3(a * h.x, a * h.y, fmaxf(h.z, 1e-6f)));
+  return normalize(t * h.x + b * h.y + n * h.z);
+}
+
+struct BsdfSample {
+  float3 wi;
+  float3 f;
+  float pdf;
+  bool valid;
+};
+
+__forceinline__ __host__ __device__ BsdfSample sample_opaque_bsdf(unsigned &seed,
+                                                                 const float3 &base_color,
+                                                                 float metallic, float roughness,
+                                                                 const float3 &n, const float3 &wo) {
+  BsdfSample out;
+  out.valid = false;
+  out.pdf = 0.0f;
+  out.f = make_float3(0.0f, 0.0f, 0.0f);
+  out.wi = make_float3(0.0f, 0.0f, 0.0f);
+
+  if (dot(n, wo) <= 0.0f) {
+    return out;
+  }
+
+  const float3 f0 = lerp(make_float3(0.04f, 0.04f, 0.04f), base_color, metallic);
+  const float f_approx = (f0.x + f0.y + f0.z) * (1.0f / 3.0f);
+  const float w_spec = saturatef(metallic + (1.0f - metallic) * f_approx);
+
+  float3 wi;
+  if (rnd(seed) < w_spec) {
+    const float3 h = sample_ggx_vndf(seed, n, wo, roughness);
+    wi = normalize(2.0f * fmaxf(dot(wo, h), 0.0f) * h - wo);
+  } else {
+    wi = cosine_sample_hemisphere(seed, n);
+  }
+
+  if (dot(n, wi) <= 0.0f) {
+    return out;
+  }
+
+  float pdf = 0.0f;
+  const float3 f = eval_opaque_bsdf(base_color, metallic, roughness, n, wo, wi, pdf);
+  if (pdf < 1e-8f) {
+    return out;
+  }
+  out.wi = wi;
+  out.f = f;
+  out.pdf = pdf;
+  out.valid = true;
+  return out;
+}
+
+__forceinline__ __host__ __device__ float mis_balance(float pdf_a, float pdf_b) {
+  const float a = fmaxf(pdf_a, 0.0f);
+  const float b = fmaxf(pdf_b, 0.0f);
+  const float sum = a + b;
+  return sum > 0.0f ? a / sum : 0.0f;
+}
+
+} // namespace nrtx

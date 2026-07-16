@@ -642,6 +642,30 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   lp.background_bottom = scene.background_bottom;
   lp.enable_nee = config.enable_nee ? 1 : 0;
 
+  CudaBuffer<float3> d_env_pixels;
+  CudaBuffer<float> d_env_cdf;
+  CudaBuffer<float> d_env_row_cdf;
+  lp.env_pixels = nullptr;
+  lp.env_cdf = nullptr;
+  lp.env_row_cdf = nullptr;
+  lp.env_width = 0;
+  lp.env_height = 0;
+  lp.env_total_lum = 0.0f;
+  lp.has_env = 0;
+  if (!scene.env_map.empty()) {
+    d_env_pixels.upload(scene.env_map.pixels);
+    d_env_cdf.upload(scene.env_map.cdf);
+    d_env_row_cdf.upload(scene.env_map.row_cdf);
+    lp.env_pixels = d_env_pixels.ptr;
+    lp.env_cdf = d_env_cdf.ptr;
+    lp.env_row_cdf = d_env_row_cdf.ptr;
+    lp.env_width = scene.env_map.width;
+    lp.env_height = scene.env_map.height;
+    lp.env_total_lum = scene.env_map.total_luminance;
+    lp.has_env = 1;
+    std::cout << "Env map: " << scene.env_map.width << "x" << scene.env_map.height << "\n";
+  }
+
   const int launches = (config.spp + config.samples_per_launch - 1) / config.samples_per_launch;
   std::cout << "Rendering " << width << "x" << height << " @ " << config.spp << " spp (" << launches
             << " launches)\n";

@@ -1,6 +1,7 @@
 #include <optix.h>
 
 #include "LaunchParams.h"
+#include "bsdf.h"
 #include "sampling.h"
 #include "vec.h"
 
@@ -22,6 +23,7 @@ struct RadiancePRD {
   int depth;
   int done;
   int first_hit;
+  float last_pdf; // BSDF pdf of last bounce (for env MIS on miss)
 };
 
 struct ShadowPRD {
@@ -51,9 +53,98 @@ __forceinline__ __device__ ShadowPRD *get_shadow_prd() {
   return reinterpret_cast<ShadowPRD *>(unpack_pointer(u0, u1));
 }
 
-__forceinline__ __device__ float3 env_color(const float3 &dir) {
-  const float t = 0.5f * (nrtx::normalize(dir).y + 1.0f);
-  return nrtx::lerp(params.background_bottom, params.background_top, t);
+__forceinline__ __device__ float3 sample_env_equirect(const float3 &dir) {
+  if (!params.has_env || !params.env_pixels || params.env_width <= 0 || params.env_height <= 0) {
+    const float t = 0.5f * (nrtx::normalize(dir).y + 1.0f);
+    return nrtx::lerp(params.background_bottom, params.background_top, t);
+  }
+  const float3 d = nrtx::normalize(dir);
+  float u = atan2f(d.z, d.x) * (0.5f / 3.14159265f) + 0.5f;
+  float v = acosf(fminf(1.0f, fmaxf(-1.0f, d.y))) * (1.0f / 3.14159265f);
+  u = u - floorf(u);
+  v = fminf(0.99999f, fmaxf(0.0f, v));
+  const float x = u * static_cast<float>(params.env_width) - 0.5f;
+  const float y = v * static_cast<float>(params.env_height) - 0.5f;
+  const int x0 = static_cast<int>(floorf(x));
+  const int y0 = static_cast<int>(floorf(y));
+  const float fx = x - static_cast<float>(x0);
+  const float fy = y - static_cast<float>(y0);
+  auto fetch = [&](int ix, int iy) -> float3 {
+    ix = (ix % params.env_width + params.env_width) % params.env_width;
+    iy = (iy < 0) ? 0 : (iy >= params.env_height ? params.env_height - 1 : iy);
+    return params.env_pixels[iy * params.env_width + ix];
+  };
+  const float3 c00 = fetch(x0, y0);
+  const float3 c10 = fetch(x0 + 1, y0);
+  const float3 c01 = fetch(x0, y0 + 1);
+  const float3 c11 = fetch(x0 + 1, y0 + 1);
+  return nrtx::lerp(nrtx::lerp(c00, c10, fx), nrtx::lerp(c01, c11, fx), fy);
+}
+
+__forceinline__ __device__ float3 env_color(const float3 &dir) { return sample_env_equirect(dir); }
+
+__forceinline__ __device__ int cdf_upper_bound(const float *cdf, int n, float u) {
+  int lo = 0, hi = n - 1;
+  while (lo < hi) {
+    const int mid = (lo + hi) >> 1;
+    if (cdf[mid] < u) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+// Importance-sample HDRI. Returns radiance and sets wi, pdf (w.r.t. solid angle).
+__forceinline__ __device__ float3 sample_env_map(unsigned &seed, float3 &wi, float &pdf) {
+  pdf = 0.0f;
+  wi = make_float3(0.0f, 1.0f, 0.0f);
+  if (!params.has_env || !params.env_pixels || !params.env_cdf || !params.env_row_cdf ||
+      params.env_total_lum <= 0.0f) {
+    return make_float3(0.0f, 0.0f, 0.0f);
+  }
+  const float r1 = nrtx::rnd(seed);
+  const float r2 = nrtx::rnd(seed);
+  const int y = cdf_upper_bound(params.env_row_cdf, params.env_height, r1);
+  const float *row = params.env_cdf + y * params.env_width;
+  const int x = cdf_upper_bound(row, params.env_width, r2);
+
+  const float u = (static_cast<float>(x) + 0.5f) / static_cast<float>(params.env_width);
+  const float v = (static_cast<float>(y) + 0.5f) / static_cast<float>(params.env_height);
+  const float phi = (u - 0.5f) * 2.0f * 3.14159265f;
+  const float theta = v * 3.14159265f;
+  const float sin_theta = fmaxf(sinf(theta), 1e-6f);
+  wi = make_float3(sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi));
+
+  const float3 Le = params.env_pixels[y * params.env_width + x];
+  const float lum = 0.2126f * Le.x + 0.7152f * Le.y + 0.0722f * Le.z;
+  // pdf = (L * sinθ / total) / (sinθ * dθ * dφ) = L / (total * 2π * π / (w*h)) roughly
+  const float map_pdf = (lum * sin_theta) / fmaxf(params.env_total_lum, 1e-8f);
+  const float solid =
+      map_pdf * static_cast<float>(params.env_width * params.env_height) /
+      (2.0f * 3.14159265f * 3.14159265f * sin_theta);
+  pdf = fmaxf(solid, 0.0f);
+  return Le;
+}
+
+__forceinline__ __device__ float pdf_env_map(const float3 &dir) {
+  if (!params.has_env || !params.env_pixels || params.env_total_lum <= 0.0f) {
+    return 0.0f;
+  }
+  const float3 d = nrtx::normalize(dir);
+  float u = atan2f(d.z, d.x) * (0.5f / 3.14159265f) + 0.5f;
+  float v = acosf(fminf(1.0f, fmaxf(-1.0f, d.y))) * (1.0f / 3.14159265f);
+  u = u - floorf(u);
+  const int x = static_cast<int>(u * params.env_width) % params.env_width;
+  int y = static_cast<int>(v * params.env_height);
+  y = y < 0 ? 0 : (y >= params.env_height ? params.env_height - 1 : y);
+  const float3 Le = params.env_pixels[y * params.env_width + x];
+  const float lum = 0.2126f * Le.x + 0.7152f * Le.y + 0.0722f * Le.z;
+  const float sin_theta = fmaxf(sinf(v * 3.14159265f), 1e-6f);
+  const float map_pdf = (lum * sin_theta) / fmaxf(params.env_total_lum, 1e-8f);
+  return map_pdf * static_cast<float>(params.env_width * params.env_height) /
+         (2.0f * 3.14159265f * 3.14159265f * sin_theta);
 }
 
 __forceinline__ __device__ bool refract(const float3 &v, const float3 &n, float eta,
@@ -423,6 +514,7 @@ extern "C" __global__ void __raygen__rg() {
     prd.depth = 0;
     prd.done = 0;
     prd.first_hit = 1;
+    prd.last_pdf = 0.0f;
 
     for (;;) {
       trace_radiance(&prd);
@@ -472,9 +564,15 @@ extern "C" __global__ void __miss__radiance() {
   // Cap miss distance for absorption so underwater sky looks tinted but finite.
   const float abs_dist = fminf(t_hit, 20.0f);
   apply_medium_absorption(prd, abs_dist);
-  prd->radiance += prd->throughput * env_color(prd->direction);
+  const float3 Le = env_color(prd->direction);
+  float mis_w = 1.0f;
+  if (params.has_env && params.enable_nee && prd->depth > 0 && prd->last_pdf > 1e-8f) {
+    const float pdf_env = pdf_env_map(prd->direction);
+    mis_w = nrtx::mis_balance(prd->last_pdf, pdf_env);
+  }
+  prd->radiance += prd->throughput * Le * mis_w;
   if (prd->first_hit) {
-    prd->albedo_aov = env_color(prd->direction);
+    prd->albedo_aov = Le;
     prd->normal_aov = -prd->direction;
     prd->first_hit = 0;
   }
@@ -547,63 +645,86 @@ extern "C" __global__ void __closesthit__radiance() {
 
   prd->radiance += prd->throughput * mat.emission;
 
-  // Next event estimation toward quad / spot lights
-  const int total_lights = params.light_count + params.spot_count;
-  if (params.enable_nee && total_lights > 0 && mat.transmission < 0.5f &&
-      mat.metallic < 0.9f && nrtx::luminance(mat.emission) < 1e-6f) {
-    const int light_idx =
-        static_cast<int>(nrtx::rnd(prd->seed) * total_lights) % total_lights;
-    const float3 brdf = base * (1.0f - mat.metallic) * (1.0f / 3.14159265f);
+  const float3 wo = -ray_dir;
+  const bool is_glass = mat.transmission > 0.5f;
+  const bool is_emissive = nrtx::luminance(mat.emission) > 1e-6f;
 
-    if (light_idx < params.light_count) {
-      const nrtx::QuadLight &light = params.lights[light_idx];
-      float3 lpos, lnormal;
-      float pdf_area;
-      const float3 Le = sample_quad_light(light, prd->seed, lpos, lnormal, pdf_area);
-      float3 to_light = lpos - p;
-      const float dist2 = nrtx::dot(to_light, to_light);
-      const float dist = sqrtf(dist2);
-      to_light = to_light / dist;
-      const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
-      const float cos_surf = nrtx::dot(n, to_light);
-      if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
-        if (!trace_shadow(p, to_light, dist)) {
-          const float pdf = pdf_area * dist2 / (cos_light * total_lights);
-          prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
+  // Next-event estimation: area/spot lights + HDRI (opaque only)
+  if (params.enable_nee && !is_glass && !is_emissive) {
+    const int total_lights = params.light_count + params.spot_count;
+    if (total_lights > 0) {
+      const int light_idx =
+          static_cast<int>(nrtx::rnd(prd->seed) * total_lights) % total_lights;
+      if (light_idx < params.light_count) {
+        const nrtx::QuadLight &light = params.lights[light_idx];
+        float3 lpos, lnormal;
+        float pdf_area;
+        const float3 Le = sample_quad_light(light, prd->seed, lpos, lnormal, pdf_area);
+        float3 to_light = lpos - p;
+        const float dist2 = nrtx::dot(to_light, to_light);
+        const float dist = sqrtf(dist2);
+        to_light = to_light / dist;
+        const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
+        const float cos_surf = nrtx::dot(n, to_light);
+        if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
+          if (!trace_shadow(p, to_light, dist)) {
+            const float pdf_light = pdf_area * dist2 / (cos_light * total_lights);
+            float pdf_bsdf = 0.0f;
+            const float3 f =
+                nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, to_light, pdf_bsdf);
+            const float w = nrtx::mis_balance(pdf_light, pdf_bsdf);
+            prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
+          }
+        }
+      } else {
+        const nrtx::SpotLight &spot = params.spots[light_idx - params.light_count];
+        float3 to_light = spot.position - p;
+        const float dist2 = nrtx::dot(to_light, to_light);
+        const float dist = sqrtf(dist2);
+        if (dist > 1e-4f) {
+          to_light = to_light / dist;
+          const float cos_surf = nrtx::dot(n, to_light);
+          const float cos_aim = nrtx::dot(-to_light, spot.direction);
+          if (cos_surf > 0.0f && cos_aim > spot.cos_outer) {
+            const float cone = smoothstep(spot.cos_outer, spot.cos_inner, cos_aim);
+            if (cone > 0.0f && !trace_shadow(p, to_light, dist)) {
+              const float pdf_light = 1.0f / static_cast<float>(total_lights);
+              float pdf_bsdf = 0.0f;
+              const float3 f = nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo,
+                                                     to_light, pdf_bsdf);
+              const float3 Le = spot.emission * (cone / dist2);
+              const float w = nrtx::mis_balance(pdf_light, pdf_bsdf);
+              prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
+            }
+          }
         }
       }
-    } else {
-      const nrtx::SpotLight &spot = params.spots[light_idx - params.light_count];
-      float3 to_light = spot.position - p;
-      const float dist2 = nrtx::dot(to_light, to_light);
-      const float dist = sqrtf(dist2);
-      if (dist > 1e-4f) {
-        to_light = to_light / dist;
-        const float cos_surf = nrtx::dot(n, to_light);
-        // Spot aims along direction; surface sees light from -to_light relative to aim.
-        const float cos_aim = nrtx::dot(-to_light, spot.direction);
-        if (cos_surf > 0.0f && cos_aim > spot.cos_outer) {
-          const float cone = smoothstep(spot.cos_outer, spot.cos_inner, cos_aim);
-          if (cone > 0.0f && !trace_shadow(p, to_light, dist)) {
-            // Point light: pdf = 1 / total_lights (discrete choice only)
-            const float pdf = 1.0f / static_cast<float>(total_lights);
-            const float3 Le = spot.emission * (cone / dist2);
-            prd->radiance += prd->throughput * brdf * Le * (cos_surf / pdf);
-          }
+    }
+
+    // HDRI next-event estimation
+    if (params.has_env) {
+      float3 wi_env;
+      float pdf_env = 0.0f;
+      const float3 Le = sample_env_map(prd->seed, wi_env, pdf_env);
+      const float cos_surf = nrtx::dot(n, wi_env);
+      if (cos_surf > 0.0f && pdf_env > 1e-8f && nrtx::luminance(Le) > 0.0f) {
+        if (!trace_shadow(p, wi_env, 1e16f)) {
+          float pdf_bsdf = 0.0f;
+          const float3 f =
+              nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, wi_env, pdf_bsdf);
+          const float w = nrtx::mis_balance(pdf_env, pdf_bsdf);
+          prd->radiance += prd->throughput * f * Le * (cos_surf * w / pdf_env);
         }
       }
     }
   }
 
-  // Sample BSDF: mix diffuse / metal specular / glass
-  float3 wo = -ray_dir;
+  // Sample BSDF continuation
   float3 wi;
   float3 f = make_float3(0.0f, 0.0f, 0.0f);
   float pdf = 0.0f;
 
-  const float r_mat = nrtx::rnd(prd->seed);
-  if (mat.transmission > 0.5f) {
-    // front_facing => hitting outward side from outside => entering medium.
+  if (is_glass) {
     const float3 ior_n = front_facing ? ng : -ng;
     const float eta = front_facing ? (1.0f / mat.ior) : mat.ior;
     const float cos_theta = fminf(1.0f, fabsf(nrtx::dot(wo, ior_n)));
@@ -624,31 +745,21 @@ extern "C" __global__ void __closesthit__radiance() {
     }
     f = make_float3(1.0f, 1.0f, 1.0f);
     pdf = 1.0f;
-  } else if (r_mat < mat.metallic) {
-    const float3 reflected = nrtx::reflect(ray_dir, n);
-    const float roughness = fmaxf(mat.roughness, 0.001f);
-    wi = nrtx::normalize(reflected + roughness * nrtx::cosine_sample_hemisphere(prd->seed, n));
-    if (nrtx::dot(wi, n) <= 0.0f) {
-      prd->done = 1;
-      return;
-    }
-    f = base;
-    pdf = 1.0f;
   } else {
-    wi = nrtx::cosine_sample_hemisphere(prd->seed, n);
-    const float cos_theta = nrtx::dot(wi, n);
-    pdf = cos_theta / 3.14159265f;
-    f = base * (1.0f / 3.14159265f);
-    if (pdf < 1e-6f) {
+    const nrtx::BsdfSample samp =
+        nrtx::sample_opaque_bsdf(prd->seed, base, mat.metallic, mat.roughness, n, wo);
+    if (!samp.valid) {
       prd->done = 1;
       return;
     }
+    wi = samp.wi;
+    f = samp.f;
+    pdf = samp.pdf;
   }
 
   prd->throughput = prd->throughput * f *
-                    (mat.transmission > 0.5f || mat.metallic > 0.5f
-                         ? 1.0f
-                         : (nrtx::dot(wi, n) / pdf));
+                    (is_glass ? 1.0f : (nrtx::dot(wi, n) / fmaxf(pdf, 1e-8f)));
+  prd->last_pdf = is_glass ? 0.0f : pdf; // glass is delta-like; skip env MIS
 
   // Russian roulette
   if (prd->depth > 3) {

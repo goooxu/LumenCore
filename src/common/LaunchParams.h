@@ -100,6 +100,14 @@ struct LaunchParams {
   float3 background_top;
   float3 background_bottom;
   int enable_nee;
+  // HDRI environment (equirectangular float RGB). Null / 0 = use gradient background.
+  float3 *env_pixels;
+  float *env_cdf;      // width*height row-normalized CDF
+  float *env_row_cdf;  // height cumulative
+  int env_width;
+  int env_height;
+  float env_total_lum;
+  int has_env;
 };
 
 struct HitGroupData {

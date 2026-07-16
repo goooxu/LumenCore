@@ -91,6 +91,7 @@ Mesh make_uv_sphere(const float3 &center, float radius, int material_id, int sli
       const float y = std::cos(phi);
       const float z = std::sin(phi) * std::sin(theta);
       mesh.vertices.push_back(center + make_float3(x, y, z) * radius);
+      mesh.normals.push_back(make_float3(x, y, z));
       mesh.texcoords.push_back(make_float2(u, v));
     }
   }

@@ -40,6 +40,7 @@ add_library(nrtx_host
   src/host/obj_loader.cpp
   src/host/physx_world.cpp
   src/host/renderer.cpp
+  src/host/env_map.cpp
 )
 target_include_directories(nrtx_host
   PUBLIC
@@ -87,6 +88,7 @@ add_custom_command(
     ${CMAKE_SOURCE_DIR}/src/common/LaunchParams.h
     ${CMAKE_SOURCE_DIR}/src/common/vec.h
     ${CMAKE_SOURCE_DIR}/src/common/sampling.h
+    ${CMAKE_SOURCE_DIR}/src/common/bsdf.h
   COMMENT "Compiling OptiX device programs to OptiX-IR"
   VERBATIM
 )
