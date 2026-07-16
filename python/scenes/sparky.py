@@ -46,7 +46,7 @@ def main():
         lc.Material(
             base_color=(1.0, 1.0, 1.0),
             roughness=0.25,
-            emission=(1.2, 2.8, 3.2),
+            emission=(0.25, 0.55, 0.65),
             albedo_tex=tex,
         )
     )
@@ -54,7 +54,7 @@ def main():
         lc.Material(
             base_color=(1.0, 1.0, 1.0),
             roughness=0.35,
-            emission=(0.4, 1.4, 0.5),
+            emission=(0.08, 0.28, 0.1),
             albedo_tex=tex,
         )
     )
@@ -78,7 +78,7 @@ def main():
     )
     emit_yellow = scene.add_material(
         lc.Material(
-            base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(8.0, 6.0, 1.2)
+            base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(1.8, 1.3, 0.25)
         )
     )
 
@@ -101,7 +101,7 @@ def main():
         lc.Material(base_color=(0.22, 0.24, 0.28), metallic=0.75, roughness=0.22)
     )
     eye = scene.add_material(
-        lc.Material(base_color=(0.96, 0.96, 0.98), roughness=0.3, emission=(0.4, 0.4, 0.45))
+        lc.Material(base_color=(0.96, 0.96, 0.98), roughness=0.3)
     )
     belt = scene.add_material(lc.Material(base_color=(0.10, 0.18, 0.35), roughness=0.55))
     leather = scene.add_material(lc.Material(base_color=(0.22, 0.12, 0.06), roughness=0.7))
@@ -109,7 +109,7 @@ def main():
         lc.Material(base_color=(0.55, 0.57, 0.60), metallic=0.65, roughness=0.3)
     )
     ant_tip = scene.add_material(
-        lc.Material(base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(6.0, 4.5, 0.8))
+        lc.Material(base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(1.5, 1.1, 0.2))
     )
 
     mascot_mtl = {
@@ -144,23 +144,24 @@ def main():
     scene.add_mesh(mascot)
     print("Loaded {}".format(mascot_path))
 
-    floor_mat = scene.add_material(lc.Material(base_color=(0.78, 0.78, 0.80), roughness=0.88))
-    wall = scene.add_material(lc.Material(base_color=(0.88, 0.90, 0.92), roughness=0.92))
+    floor_mat = scene.add_material(lc.Material(base_color=(0.42, 0.42, 0.44), roughness=0.9))
+    wall = scene.add_material(lc.Material(base_color=(0.55, 0.56, 0.58), roughness=0.92))
 
     scene.add_mesh(lc.make_quad((-5, 0, -5), (10, 0, 0), (0, 0, 10), floor_mat))
     scene.add_mesh(lc.make_quad((-5, 0, -2.6), (10, 0, 0), (0, 4.2, 0), wall))
 
-    light_corner = (-1.6, 3.7, -0.8)
-    light_u = (3.2, 0, 0)
-    light_v = (0, 0, 2.4)
+    light_corner = (-1.4, 3.6, -0.7)
+    light_u = (2.8, 0, 0)
+    light_v = (0, 0, 2.0)
+    # Mesh is a visible white panel only; illumination comes from NEE quad light.
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(15, 14.5, 13.5))
+        lc.Material(base_color=(0.95, 0.95, 0.95), roughness=1.0)
     )
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
-    scene.add_quad_light(light_corner, light_u, light_v, (15, 14.5, 13.5))
+    scene.add_quad_light(light_corner, light_u, light_v, (6.5, 6.2, 5.8))
 
-    scene.background_top = (0.62, 0.72, 0.88)
-    scene.background_bottom = (0.40, 0.42, 0.46)
+    scene.background_top = (0.45, 0.55, 0.72)
+    scene.background_bottom = (0.22, 0.23, 0.26)
 
     camera = lc.Camera(
         eye=(0.15, 1.7, 4.6), lookat=(0.0, 1.0, 0.0), fov_y_deg=36, aspect=16 / 9
