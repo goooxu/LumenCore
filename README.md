@@ -1,60 +1,62 @@
 # LumenCore
 
-NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CUDA 13** path tracing, validated on **RTX 5090**.
+NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CUDA 13** path tracing. Gallery renders validated on **GB200** (`10.85.120.24`, 4×GPU) and previously on **RTX 5090**.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
-**技术报告（中文，面向图形学初学者）**：[docs/report/](docs/report/) — 渲染方程、路径追踪、GGX/MIS/HDRI、OptiX 与 PhysX 实现说明。
+**技术报告（中文，面向图形学初学者）**：[docs/report/](docs/report/) — 渲染方程、路径追踪、GGX/MIS/HDRI、OptiX 与 PhysX 实现说明。首页 Gallery 为两层结构；报告章节仍引用 `outputs/*.png` 旧单图。
 
 ## Gallery
 
-### GGX Studio (HDRI + roughness)
+### 综合展示 · Atelier
 
-![GGX Studio](outputs/ggx_studio.png)
+![Atelier showcase](outputs/gallery/showcase.png)
 
-Metal roughness row + metallic color row + **glass roughness row** under an importance-sampled **HDRI** (`Scene.load_env_map`) with GGX microfacet BRDF/BTDF and balance MIS on opaque paths.
+一帧里叠满 LumenCore 双栈能力：**PhysX** 短仿真后定格刚体砖堆，经 **OptiX IAS** 实例化再路径追踪；同框还有壁炉火焰体积、HDRI/面光/聚光与 NEE、GGX 金属与磨砂玻璃、Sparky 法线贴图、Capsule、**Spot** 奶牛，以及浅水池的 Beer-Lambert 吸收。脚本：`python/scenes/atelier.py`（2560×1440）。
 
-### Fireplace (volumetric flame)
+### 特性对比（同机位 ON / OFF）
 
-![Fireplace](outputs/fireplace.png)
+每组两张 **1024×1024**，只翻转一个开关。批量入口：`python/scenes/gallery_compare.py`；并行脚本：`scripts/render_gallery.sh`。
 
-Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. **Sparky** (albedo + **normal map**) and **Capsule Mascot** sit by the fire in plastic / chrome / yellow / glass material variants.
+#### 法线贴图
 
-### PhysX Collapse
+面板浮雕有无：Sparky 胸口特写，`normal_tex` 开/关。
 
-![PhysX Collapse](outputs/physx_collapse.png)
+| ON | OFF |
+|----|-----|
+| ![normal on](outputs/gallery/compare/normal_on.png) | ![normal off](outputs/gallery/compare/normal_off.png) |
 
-Studio brick tower knocked over by a heavy **glass fireball** (procedural flame volume inside) rolling down a ramp in a darker studio. Brick-sized **Sparky** and **Capsule Mascot** are mixed into the tower. **PhysX** advances GPU rigid bodies; each sampled frame updates **OptiX IAS** instance transforms from actor poses (prototype GAS reused) and path-traces with **OptiX**. Frame sequence: `outputs/physx_collapse/`; homepage hero: `outputs/physx_collapse.png`.
+#### Next Event Estimation
 
-### Cornell Box
+暗环境 + 面光：开 NEE 后阴影更干净、方差更低。
 
-![Cornell Box](outputs/cornell.png)
+| ON | OFF |
+|----|-----|
+| ![nee on](outputs/gallery/compare/nee_on.png) | ![nee off](outputs/gallery/compare/nee_off.png) |
 
-Classic enclosed room with red / green walls, a glass sphere, a metal sphere, and a ceiling area light. Shows soft shadows, color bleeding, refraction caustics, and Next Event Estimation.
+#### OptiX Denoiser
 
-### Materials Ball
+低 spp 中景：噪点 vs 引导式去噪。
 
-![Materials Ball](outputs/materials_ball.png)
+| ON | OFF |
+|----|-----|
+| ![denoiser on](outputs/gallery/compare/denoiser_on.png) | ![denoiser off](outputs/gallery/compare/denoiser_off.png) |
 
-Material chart of diffuse, metal, and glass spheres under studio **HDRI** plus a soft area fill. Useful for checking roughness / metallic / transmission with the GGX PBR model.
+#### 火焰体积
 
-### Outdoor Env
+壁炉局部：体积自发光有无（OFF 仅冷灰烬）。
 
-![Outdoor Env](outputs/outdoor_env.png)
+| ON | OFF |
+|----|-----|
+| ![flame on](outputs/gallery/compare/flame_on.png) | ![flame off](outputs/gallery/compare/flame_off.png) |
 
-Open ground scene with chrome and glass props lit primarily by HDRI, soft fill light, and light depth-of-field.
+#### Beer-Lambert
 
-### Sparky + Capsule Mascot
+水下岩石：吸收系数正常 vs 全零（水深颜色衰减）。
 
-![Sparky](outputs/sparky.png)
-
-Studio duo: **Sparky** (albedo + **tangent-space normal map**) beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`). Both characters are **AI-generated** assets bundled with this repo.
-
-### Water Pool
-
-![Water Pool](outputs/water_pool.png)
-
-Open deep water with a **calm procedural surface** (`make_water_surface` + analytic normals, IOR 1.33 + Beer-Lambert absorption over ~4 m depth). **Sparky** and **Capsule Mascot** stand on a wooden pier; submerged rocks cue depth and refraction.
+| ON | OFF |
+|----|-----|
+| ![beer on](outputs/gallery/compare/beer_on.png) | ![beer off](outputs/gallery/compare/beer_off.png) |
 
 ---
 
@@ -78,7 +80,7 @@ Open deep water with a **calm procedural surface** (`make_water_surface` + analy
 
 ## Requirements
 
-- NVIDIA GPU with RT Cores (tested: RTX 5090)
+- NVIDIA GPU with RT Cores (tested: GB200 @ `10.85.120.24`, RTX 5090)
 - Docker with CUDA 13+ toolkit (default base: `nvidia/cuda:13.0.1-devel-ubuntu24.04`; `docker/run.sh` builds `lumencore-build:cuda13` with Python headers)
 - OptiX denoiser weights at `/usr/share/nvidia/nvoptix.bin`
 - Vendored OptiX 9 headers under `third_party/optix`
@@ -97,6 +99,10 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
 
 # Render scenes (PYTHONPATH is set by docker/run.sh)
+./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.png 192 1'
+./docker/run.sh 'python3 /work/python/scenes/gallery_compare.py --feature normal --mode on --out /results/gallery/compare/normal_on.png'
+# Or multi-GPU batch:
+# NRTX_PHYSX_ROOT=/tmp/LumenCore-physx ./scripts/render_gallery.sh
 ./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.png 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.png 256 1'
@@ -140,29 +146,28 @@ lc.Renderer().render(scene, cam, cfg)
 |------|------|
 | `docs/report/` | 中文技术报告（分章 Markdown + `figures/`） |
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (ggx_studio, cornell, materials_ball, outdoor_env, sparky, physx_collapse, fireplace, water_pool) |
+| `python/scenes/` | Scene scripts (`atelier`, `gallery_compare`, plus legacy demos) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, PNG I/O |
-| `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` |
+| `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` (or `PHYSX_INSTALL`) |
+| `scripts/render_gallery.sh` | Multi-GPU gallery showcase + compare renders |
 | `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |
 | `scripts/gen_studio_hdr.py` | Procedural studio Radiance HDR |
 | `assets/models` | Character OBJ / MTL / textures |
 | `assets/env` | HDRI environment maps |
-| `outputs/` | Sample renders from RTX 5090 |
+| `outputs/` | Legacy per-scene stills (report chapters) |
+| `outputs/gallery/` | Homepage two-tier gallery (`showcase.png` + `compare/`) |
 
-## Performance (RTX 5090, denoised)
+## Performance (GB200 @ 10.85.120.24, denoised)
 
 | Scene | Resolution | Notes |
 |-------|------------|-------|
-| ggx_studio | 2560×1440 | HDRI + GGX metal / dielectric / rough-glass rows |
-| cornell | 2048×2048 | ~1.51 s @ 256 spp |
-| materials_ball | 2560×1440 | HDRI-lit material chart |
-| outdoor_env | 2560×1440 | HDRI + soft fill |
-| sparky | 2560×1440 | Sparky + Capsule Mascot duo |
-| physx_collapse | 2560×1440 | ~0.24 s path-trace / frame @ 96 spp; PhysX backend `gpu` |
-| fireplace | 2560×1440 | ~1.50 s @ 256 spp (volume march + NEE) |
-| water_pool | 2560×1440 | open deep water + pier; Beer-Lambert depth |
+| gallery showcase (`atelier`) | 2560×1440 | PhysX settle + multi-feature still |
+| gallery compare (×10) | 1024×1024 | ON/OFF pairs; denoiser uses low spp |
+| Legacy demos (`outputs/*.png`) | 2K class | Still used by `docs/report/` chapters |
+
+Parallel gallery render: `NRTX_PHYSX_ROOT=... ./scripts/render_gallery.sh` (uses `NRTX_GPU` round-robin).
 
 ## License
 

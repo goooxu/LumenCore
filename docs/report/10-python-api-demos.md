@@ -15,6 +15,8 @@ lc.Renderer().render(scene, cam, cfg)
 
 绑定在 `bindings/lumencore_module.cpp`：把 C++ `Scene` / `Material` / `PhysXWorld` 等暴露给 Python。
 
+首页 Gallery 为两层（`atelier` 综合展示 + `gallery_compare` 特性 ON/OFF）；下面各节仍用旧 `outputs/*.png` 单图做章节对照。
+
 ## 常用 API 速查
 
 | 需求 | 调用 |
@@ -33,6 +35,14 @@ lc.Renderer().render(scene, cam, cfg)
 资源路径：Docker 内常用 `/work/...`；脚本里多用 `resolve_asset(...)` 兼容多种工作目录。
 
 ## 场景 ↔ 原理（带图）
+
+### Atelier — 首页综合（两层 Gallery 第一层）
+
+脚本：`python/scenes/atelier.py` → `outputs/gallery/showcase.png`。PhysX 短仿真定格 + IAS，火焰 / HDRI / NEE / GGX / 法线 / Spot / Beer-Lambert 同框。
+
+### gallery_compare — 特性 ON/OFF（第二层）
+
+脚本：`python/scenes/gallery_compare.py --feature … --mode on|off` → `outputs/gallery/compare/`。
 
 ### Cornell Box — 经典积分
 

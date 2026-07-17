@@ -4,6 +4,8 @@
 
 本报告与仓库源码一一对应；公式先讲直觉，再落到 `src/`、`python/scenes/` 里的具体函数。
 
+**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 是**两层结构**（`outputs/gallery/showcase.png` 综合展示 + `outputs/gallery/compare/` 特性 ON/OFF）。本报告各章仍链接 `outputs/*.png` 旧单图，便于对照单特性。
+
 ## 建议阅读路线
 
 1. 先读 [01 项目总览](01-overview.md)，建立「物理仿真 → 三角网格 → 光线追踪 → PNG」的大图。
@@ -32,8 +34,10 @@
 
 ## 演示场景 ↔ 原理对照
 
-| 场景 | Gallery | 主要演示 |
-|------|---------|----------|
+| 场景 | 图 | 主要演示 |
+|------|-----|----------|
+| Atelier（首页综合） | `outputs/gallery/showcase.png` | PhysX 定格 + IAS、火焰、HDRI/NEE、GGX、法线、Spot、Beer-Lambert |
+| 特性对比 | `outputs/gallery/compare/*_{on,off}.png` | 法线 / NEE / Denoiser / 火焰 / Beer-Lambert ON·OFF |
 | Cornell Box | `outputs/cornell.png` | 面光 NEE、玻璃折射、间接照明 |
 | GGX Studio | `outputs/ggx_studio.png` | GGX 粗糙度 / 金属度、HDRI |
 | Fireplace | `outputs/fireplace.png` | 火焰体积、暗场景、吉祥物材质 |

@@ -5,6 +5,23 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-07-17
+
+### Added
+
+- **Two-tier README Gallery**: one 2K multi-feature showcase + five 1K ON/OFF feature compares
+- `python/scenes/atelier.py` — PhysX-settled atelier still (flame, HDRI/NEE, GGX metal/glass, Sparky normals, Capsule, Spot cow, Beer-Lambert basin)
+- `python/scenes/gallery_compare.py` — `--feature {normal,nee,denoiser,flame,beer} --mode on|off`
+- `scripts/render_gallery.sh` — multi-GPU parallel render via `NRTX_GPU` / `docker/run.sh`
+- Gallery assets under `outputs/gallery/` (`showcase.png` + `compare/*_{on,off}.png`)
+
+### Changed
+
+- README homepage Gallery no longer tiles the eight legacy demo stills (those PNGs remain for `docs/report/`)
+- `docker/run.sh` accepts `NRTX_GPU=<index>` for `--gpus device=N` parallel jobs
+- Docs/report intro + models README note Spot in `atelier`; Performance notes use test host `10.85.120.24` (GB200×4)
+- `docker/run.sh` / `scripts/setup_physx.sh`: aarch64 host support (`NRTX_PHYSX_ROOT`, multiarch OptiX libs, arch-matched CMake)
+
 ## [0.13.0] - 2026-07-17
 
 ### Added
