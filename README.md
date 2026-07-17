@@ -14,6 +14,18 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 冷灰墙的工作室一角：后墙壁炉里一团程序化火焰把石台与冷灰烬染成暖橙；炉前彩色砖块、金属球、磨砂玻璃球，以及 Capsule、Spot、Sparky，都从空中落入场景，完全由 PhysX 短仿真算出落定姿态，再交给 OptiX IAS 画出——没有事后手调位姿。右前方浅石盆里一汪带 Beer-Lambert 衰减的清水，金属罐与小银球靠墙摆着；顶光与聚光在地面上投下软阴影，HDRI 把高光擦在金属与玻璃上。整帧是渲染器能力的总览，不是单特性样张。脚本：`python/scenes/atelier.py`（2560×1440）。
 
+### 封面 · 暮潮观测站
+
+![暮潮观测站](outputs/gallery/dusk_observatory.png)
+
+日落后的海岸检修平台：Spot 立在中央检修台，Sparky 操作陶瓷 / 粗糙金属 / 铬 / 低粗糙光学外壳的仪器，Capsule 在侧台校准带法线纹理的金属样片。低角度 dusk HDR 与有限灯共同照明；前景潮池用微表面 Fresnel 与 RGB Beer 吸收映出冷暖倒影，远侧火焰信标以吸收—自发光体积补暖色。脚本：`python/scenes/dusk_observatory.py`（2560×1440）。
+
+### 封面 · Assembly Hall
+
+![Assembly Hall](outputs/gallery/assembly_hall.png)
+
+玩具工厂总装大厅：正午 HDR 天窗涌入；熔炉开口火苗锐利，磨砂玻璃隔间里一团炉火只显暖晕；零发射体积做黑烟柱，地面暗斑近似体积影。传送带上糖果色塑料 Sparky 列队（GGX 双瓣近似涂层），质检唤醒的那只亮起纹理屏并配 NEE 面光；黄色 Capsule 立在光斑中督工，PhysX 把一箱玩具 Spot 定格在倾泻半空；水冷池多频波纹与 Beer–Lambert 倒映全场，金属桁架与程序化镂空齿轮标志收尾。脚本：`python/scenes/assembly_hall.py`（2560×1440）。
+
 ### 特性对比（同机位 ON / OFF）
 
 每组两张 **1024×1024**，只翻转一个开关。批量入口：`python/scenes/gallery_compare.py`；并行脚本：`scripts/render_gallery.sh`。
@@ -100,6 +112,8 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 
 # Render scenes (PYTHONPATH is set by docker/run.sh)
 ./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.png 192 1'
+./docker/run.sh 'python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.png 192 1'
+./docker/run.sh 'python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.png 192 1'
 ./docker/run.sh 'python3 /work/python/scenes/gallery_compare.py --feature normal --mode on --out /results/gallery/compare/normal_on.png'
 # Or multi-GPU batch:
 # NRTX_PHYSX_ROOT=/tmp/LumenCore-physx ./scripts/render_gallery.sh
@@ -146,7 +160,7 @@ lc.Renderer().render(scene, cam, cfg)
 |------|------|
 | `docs/report/` | 中文技术报告（分章 Markdown + `figures/`） |
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (`atelier`, `gallery_compare`, plus legacy demos) |
+| `python/scenes/` | Scene scripts (`atelier`, cover scenes, `gallery_compare`, plus legacy demos) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, PNG I/O |
@@ -164,6 +178,7 @@ lc.Renderer().render(scene, cam, cfg)
 | Scene | Resolution | Notes |
 |-------|------------|-------|
 | gallery showcase (`atelier`) | 2560×1440 | PhysX settle + multi-feature still |
+| gallery covers (`dusk_observatory`, `assembly_hall`) | 2560×1440 | Coastal dusk + factory noon covers |
 | gallery compare (×10) | 1024×1024 | ON/OFF pairs; denoiser uses low spp |
 | Legacy demos (`outputs/*.png`) | 2K class | Still used by `docs/report/` chapters |
 

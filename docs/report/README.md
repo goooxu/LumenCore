@@ -4,7 +4,7 @@
 
 本报告与仓库源码一一对应；公式先讲直觉，再落到 `src/`、`python/scenes/` 里的具体函数。
 
-**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 是**两层结构**（`outputs/gallery/showcase.png` 综合展示 + `outputs/gallery/compare/` 特性 ON/OFF）。本报告各章仍链接 `outputs/*.png` 旧单图，便于对照单特性。
+**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 含综合展示 `showcase.png`、两封面（`dusk_observatory.png` / `assembly_hall.png`）与 `compare/` 特性 ON/OFF。本报告各章仍链接 `outputs/*.png` 旧单图，便于对照单特性。
 
 ## 建议阅读路线
 
@@ -37,6 +37,8 @@
 | 场景 | 图 | 主要演示 |
 |------|-----|----------|
 | Atelier（首页综合） | `outputs/gallery/showcase.png` | PhysX 定格 + IAS、火焰、HDRI/NEE、GGX、法线、Spot、Beer-Lambert |
+| 暮潮观测站 | `outputs/gallery/dusk_observatory.png` | 海岸 dusk HDR、多材质光学台、Beer 潮池、火焰信标 |
+| Assembly Hall | `outputs/gallery/assembly_hall.png` | 工厂正午、磨砂透射、吸收烟、PhysX Spot 倾泻、糖果 Sparky |
 | 特性对比 | `outputs/gallery/compare/*_{on,off}.png` | 法线 / NEE / Denoiser / 火焰 / Beer-Lambert ON·OFF |
 | Cornell Box | `outputs/cornell.png` | 面光 NEE、玻璃折射、间接照明 |
 | GGX Studio | `outputs/ggx_studio.png` | GGX 粗糙度 / 金属度、HDRI |

@@ -15,7 +15,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 绑定在 `bindings/lumencore_module.cpp`：把 C++ `Scene` / `Material` / `PhysXWorld` 等暴露给 Python。
 
-首页 Gallery 为两层（`atelier` 综合展示 + `gallery_compare` 特性 ON/OFF）；下面各节仍用旧 `outputs/*.png` 单图做章节对照。
+首页 Gallery：`atelier` 综合展示 + 两封面（`dusk_observatory` / `assembly_hall`）+ `gallery_compare` 特性 ON/OFF；下面各节仍用旧 `outputs/*.png` 单图做章节对照。
 
 ## 常用 API 速查
 
@@ -36,11 +36,18 @@ lc.Renderer().render(scene, cam, cfg)
 
 ## 场景 ↔ 原理（带图）
 
-### Atelier — 首页综合（两层 Gallery 第一层）
+### Atelier — 首页综合（Gallery 第一层）
 
 脚本：`python/scenes/atelier.py` → `outputs/gallery/showcase.png`。PhysX 短仿真定格 + IAS，火焰 / HDRI / NEE / GGX / 法线 / Spot / Beer-Lambert 同框。
 
-### gallery_compare — 特性 ON/OFF（第二层）
+### 暮潮观测站 / Assembly Hall — 封面
+
+- `python/scenes/dusk_observatory.py` → `outputs/gallery/dusk_observatory.png`：海岸暮色平台，多材质光学台 + Beer 潮池 + 火焰信标。
+- `python/scenes/assembly_hall.py` → `outputs/gallery/assembly_hall.png`：工厂正午 HDR、磨砂透射炉火、吸收烟柱、PhysX 倾泻 Spot、糖果 Sparky 与镂空齿轮。
+
+### gallery_compare — 特性 ON/OFF
+
+
 
 脚本：`python/scenes/gallery_compare.py --feature … --mode on|off` → `outputs/gallery/compare/`。
 

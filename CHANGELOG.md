@@ -5,6 +5,14 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-07-17
+
+### Added
+
+- Gallery cover scenes after Atelier: `python/scenes/dusk_observatory.py` (暮潮观测站) and `python/scenes/assembly_hall.py` (Assembly Hall), both 2560×1440
+- Procedural env maps `assets/env/dusk.hdr` and `assets/env/noon_factory.hdr` (`scripts/gen_studio_hdr.py dusk|noon`)
+- README Gallery sections + `scripts/render_gallery.sh` jobs for both covers
+
 ## [0.14.0] - 2026-07-17
 
 ### Added
