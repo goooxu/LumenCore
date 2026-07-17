@@ -29,7 +29,7 @@ def resolve_asset(relative: str) -> str:
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "materials_ball.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "materials_ball.heic"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 256
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 

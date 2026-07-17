@@ -65,7 +65,7 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 `sample_ggx_vndf` 按可见法线分布抽微表面法线 $h$，再关于 $h$ 反射得到 $`\omega_i`$。  
 漫反射与镜面用随机选择混合，pdf 在 `eval_opaque_bsdf` 里一并估算，供 MIS 使用。
 
-![GGX Studio](../../outputs/ggx_studio.png)
+![GGX Studio](../../outputs/ggx_studio.heic)
 
 *图：后排金属球粗糙度递增；前排金属度递增。对应 `python/scenes/ggx_studio.py`。*
 
@@ -96,7 +96,7 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 
 Sparky 的 `sparky_normal.png` 与 albedo 共用 UV 图集（面板线、屏框、胸口浮雕等）。演示：`sparky` / `fireplace` / `physx_collapse`。
 
-![Sparky](../../outputs/sparky.png)
+![Sparky](../../outputs/sparky.heic)
 
 图注：右侧 Sparky 使用 albedo + 法线贴图。
 

@@ -49,7 +49,7 @@ def _local_box(half: tuple[float, float, float], mat_id: int) -> lc.Mesh:
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/showcase.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/showcase.heic"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 192
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
     sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 240

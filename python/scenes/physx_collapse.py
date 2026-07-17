@@ -293,12 +293,12 @@ def main() -> int:
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 128
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 
-    if out_arg.suffix.lower() == ".png":
+    if out_arg.suffix.lower() in (".png", ".heic", ".heif"):
         hero_path = out_arg
         frames_dir = out_arg.parent / out_arg.stem
     else:
         frames_dir = out_arg
-        hero_path = out_arg.parent / f"{out_arg.name}.png"
+        hero_path = out_arg.parent / f"{out_arg.name}.heic"
     frames_dir.mkdir(parents=True, exist_ok=True)
     hero_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -406,22 +406,22 @@ def main() -> int:
         if step_i % frame_every == 0:
             flame_time = 1.2 + step_i * 0.035
             scene = build_render_scene(world, actors, brick_half, flame_time=flame_time)
-            out_png = frames_dir / f"frame_{frame_idx:04d}.png"
+            out_frame = frames_dir / f"frame_{frame_idx:04d}.heic"
             cfg = lc.RenderConfig(
                 width=2560,
                 height=1440,
                 spp=spp,
                 denoise=denoise,
-                output_path=str(out_png),
+                output_path=str(out_frame),
             )
             print(
-                f"[physx_collapse] render frame {frame_idx} @ sim step {step_i} → {out_png}",
+                f"[physx_collapse] render frame {frame_idx} @ sim step {step_i} → {out_frame}",
                 flush=True,
             )
             renderer.render(scene, camera, cfg)
-            frame_paths.append(out_png)
+            frame_paths.append(out_frame)
             if step_i == hero_step:
-                shutil.copyfile(out_png, hero_path)
+                shutil.copyfile(out_frame, hero_path)
                 print(f"[physx_collapse] hero image → {hero_path}", flush=True)
             frame_idx += 1
 

@@ -27,14 +27,28 @@ if [[ ! -x "${CMAKE_DIR}/bin/cmake" ]] || ! "${CMAKE_DIR}/bin/cmake" --version >
   tar -xzf /tmp/cmake-linux.tgz -C "${CMAKE_DIR}" --strip-components=1
 fi
 
-# Ensure a CUDA image with Python headers exists for pybind11 builds.
+# Ensure a CUDA image with Python headers + libheif (HDR HEIC) for builds.
 if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
+  NEED_BUILD=0
   if ! docker image inspect lumencore-build:cuda13 >/dev/null 2>&1; then
-    echo "Building lumencore-build:cuda13 (adds python3-dev) ..."
+    NEED_BUILD=1
+  elif ! docker run --rm --entrypoint /bin/bash lumencore-build:cuda13 -lc \
+      'test -f /etc/lumencore-heif.ok' >/dev/null 2>&1; then
+    echo "lumencore-build:cuda13 missing HEIF marker; rebuilding ..."
+    docker rmi lumencore-build:cuda13 >/dev/null 2>&1 || true
+    NEED_BUILD=1
+  fi
+  if [[ "${NEED_BUILD}" -eq 1 ]]; then
+    echo "Building lumencore-build:cuda13 (python3-dev + libheif/x265) ..."
+    docker rm -f lumencore-pysetup >/dev/null 2>&1 || true
     docker run --name lumencore-pysetup "${IMAGE}" bash -lc \
-      "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-dev git"
+      "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python3 python3-dev git pkg-config \
+        libheif-dev libheif1 libx265-dev libde265-dev \
+        libheif-plugin-x265 libheif-plugin-libde265 && \
+       touch /etc/lumencore-heif.ok"
     docker commit lumencore-pysetup lumencore-build:cuda13
-    docker rm lumencore-pysetup
+    docker rm -f lumencore-pysetup
   fi
   IMAGE="lumencore-build:cuda13"
 fi

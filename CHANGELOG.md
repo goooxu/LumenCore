@@ -5,6 +5,18 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-07-17
+
+### Added
+
+- **HDR HEIC output**: linear → auto-expose nits → Rec.2020 PQ → 10-bit HEVC via libheif (`write_heic_hdr`)
+- Docker build image installs `libheif` / `libx265`; CMake links `libheif`
+
+### Changed
+
+- All scene defaults and Gallery paths use `.heic` (`.png` still selects legacy ACES gamma PNG)
+- README / report Markdown image links point at `.heic`
+
 ## [0.15.0] - 2026-07-17
 
 ### Added

@@ -1,4 +1,5 @@
 #include "nrtx/nrtx.h"
+#include "nrtx/heic_writer.h"
 
 #include "LaunchParams.h"
 #include "vec.h"
@@ -12,8 +13,10 @@
 
 #include <chrono>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -881,24 +884,53 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   CUDA_CHECK(cudaMemcpy(host.data(), final_device, pixel_count * sizeof(float4),
                         cudaMemcpyDeviceToHost));
 
-  std::vector<unsigned char> rgba(pixel_count * 4);
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
-      const size_t dst = static_cast<size_t>(y) * width + x;
-      const size_t src = static_cast<size_t>(height - 1 - y) * width + x;
-      float3 c = make_float3(host[src].x, host[src].y, host[src].z);
-      c = aces_tonemap(c);
-      c = make_float3(std::pow(c.x, 1.0f / 2.2f), std::pow(c.y, 1.0f / 2.2f),
-                      std::pow(c.z, 1.0f / 2.2f));
-      rgba[dst * 4 + 0] = static_cast<unsigned char>(clamp(c.x, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 1] = static_cast<unsigned char>(clamp(c.y, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 2] = static_cast<unsigned char>(clamp(c.z, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 3] = 255;
+  auto ends_with_ci = [](const std::string &s, const char *suf) {
+    const size_t n = std::strlen(suf);
+    if (s.size() < n) {
+      return false;
     }
-  }
+    for (size_t i = 0; i < n; ++i) {
+      const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(s[s.size() - n + i])));
+      const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(suf[i])));
+      if (a != b) {
+        return false;
+      }
+    }
+    return true;
+  };
 
-  if (!stbi_write_png(config.output_path.c_str(), width, height, 4, rgba.data(), width * 4)) {
-    throw std::runtime_error("Failed to write PNG: " + config.output_path);
+  const bool want_heic = ends_with_ci(config.output_path, ".heic") ||
+                         ends_with_ci(config.output_path, ".heif");
+
+  if (want_heic) {
+    std::vector<float3> linear(pixel_count);
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        const size_t dst = static_cast<size_t>(y) * width + x;
+        const size_t src = static_cast<size_t>(height - 1 - y) * width + x;
+        linear[dst] = make_float3(host[src].x, host[src].y, host[src].z);
+      }
+    }
+    write_heic_hdr(config.output_path, width, height, linear);
+  } else {
+    std::vector<unsigned char> rgba(pixel_count * 4);
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        const size_t dst = static_cast<size_t>(y) * width + x;
+        const size_t src = static_cast<size_t>(height - 1 - y) * width + x;
+        float3 c = make_float3(host[src].x, host[src].y, host[src].z);
+        c = aces_tonemap(c);
+        c = make_float3(std::pow(c.x, 1.0f / 2.2f), std::pow(c.y, 1.0f / 2.2f),
+                        std::pow(c.z, 1.0f / 2.2f));
+        rgba[dst * 4 + 0] = static_cast<unsigned char>(clamp(c.x, 0.0f, 1.0f) * 255.0f + 0.5f);
+        rgba[dst * 4 + 1] = static_cast<unsigned char>(clamp(c.y, 0.0f, 1.0f) * 255.0f + 0.5f);
+        rgba[dst * 4 + 2] = static_cast<unsigned char>(clamp(c.z, 0.0f, 1.0f) * 255.0f + 0.5f);
+        rgba[dst * 4 + 3] = 255;
+      }
+    }
+    if (!stbi_write_png(config.output_path.c_str(), width, height, 4, rgba.data(), width * 4)) {
+      throw std::runtime_error("Failed to write PNG: " + config.output_path);
+    }
   }
   std::cout << "Wrote " << config.output_path << "\n";
 }

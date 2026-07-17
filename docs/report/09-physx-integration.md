@@ -64,7 +64,7 @@ Python / C++ 场景 API：
 4. 每帧：`get_pose` → `add_instance` → `Renderer.render`（日志可见 `IAS: N prototype GAS, M instances`）。
 5. 首页 hero 默认对应某一帧（如 `frame_0010`）。
 
-![PhysX Collapse](../../outputs/physx_collapse.png)
+![PhysX Collapse](../../outputs/physx_collapse.heic)
 
 图注：玻璃火球撞塌砖塔（hero 帧）。
 

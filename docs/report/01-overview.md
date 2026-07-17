@@ -9,7 +9,7 @@ LumenCore 是一个**教学向**的 NVIDIA GPU 双栈演示：
 
 你可以把它想成两台机器接力：物理引擎负责「东西怎么动」，渲染器负责「眼睛看见什么」。
 
-![PhysX Collapse 示例](../../outputs/physx_collapse.png)
+![PhysX Collapse 示例](../../outputs/physx_collapse.heic)
 
 *图：刚体倒塌 + 玻璃火球。物理位姿每帧更新后，再交给路径追踪。*
 

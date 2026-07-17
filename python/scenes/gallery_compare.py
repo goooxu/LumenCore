@@ -374,7 +374,7 @@ def main() -> int:
     parser.add_argument("--denoise", type=int, default=1, help="1=on, 0=off (denoiser feature overrides)")
     args = parser.parse_args()
 
-    out = args.out or f"outputs/gallery/compare/{args.feature}_{args.mode}.png"
+    out = args.out or f"outputs/gallery/compare/{args.feature}_{args.mode}.heic"
     spp = args.spp if args.spp > 0 else default_spp(args.feature)
     Path(out).parent.mkdir(parents=True, exist_ok=True)
 

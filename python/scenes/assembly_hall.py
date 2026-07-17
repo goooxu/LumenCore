@@ -160,7 +160,7 @@ def sparky_materials(
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/assembly_hall.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/assembly_hall.heic"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 192
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
     sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 48

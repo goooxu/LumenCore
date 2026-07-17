@@ -4,25 +4,25 @@ NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CU
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
-**技术报告（中文，面向图形学初学者）**：[docs/report/](docs/report/) — 渲染方程、路径追踪、GGX/MIS/HDRI、OptiX 与 PhysX 实现说明。首页 Gallery 为两层结构；报告章节仍引用 `outputs/*.png` 旧单图。
+**技术报告（中文，面向图形学初学者）**：[docs/report/](docs/report/) — 渲染方程、路径追踪、GGX/MIS/HDRI、OptiX 与 PhysX 实现说明。首页 Gallery 为两层结构；报告章节仍引用 `outputs/*.heic` 旧单图。
 
 ## Gallery
 
 ### 综合展示 · Atelier
 
-![Atelier showcase](outputs/gallery/showcase.png)
+![Atelier showcase](outputs/gallery/showcase.heic)
 
 冷灰墙的工作室一角：后墙壁炉里一团程序化火焰把石台与冷灰烬染成暖橙；炉前彩色砖块、金属球、磨砂玻璃球，以及 Capsule、Spot、Sparky，都从空中落入场景，完全由 PhysX 短仿真算出落定姿态，再交给 OptiX IAS 画出——没有事后手调位姿。右前方浅石盆里一汪带 Beer-Lambert 衰减的清水，金属罐与小银球靠墙摆着；顶光与聚光在地面上投下软阴影，HDRI 把高光擦在金属与玻璃上。整帧是渲染器能力的总览，不是单特性样张。脚本：`python/scenes/atelier.py`（2560×1440）。
 
 ### 封面 · 暮潮观测站
 
-![暮潮观测站](outputs/gallery/dusk_observatory.png)
+![暮潮观测站](outputs/gallery/dusk_observatory.heic)
 
 日落后的海岸检修平台：Spot 立在中央检修台，Sparky 操作陶瓷 / 粗糙金属 / 铬 / 低粗糙光学外壳的仪器，Capsule 在侧台校准带法线纹理的金属样片。低角度 dusk HDR 与有限灯共同照明；前景潮池用微表面 Fresnel 与 RGB Beer 吸收映出冷暖倒影，远侧火焰信标以吸收—自发光体积补暖色。脚本：`python/scenes/dusk_observatory.py`（2560×1440）。
 
 ### 封面 · Assembly Hall
 
-![Assembly Hall](outputs/gallery/assembly_hall.png)
+![Assembly Hall](outputs/gallery/assembly_hall.heic)
 
 玩具工厂总装大厅：正午 HDR 天窗涌入；熔炉开口火苗锐利，磨砂玻璃隔间里一团炉火只显暖晕；零发射体积做黑烟柱，地面暗斑近似体积影。传送带上糖果色塑料 Sparky 列队（GGX 双瓣近似涂层），质检唤醒的那只亮起纹理屏并配 NEE 面光；黄色 Capsule 立在光斑中督工，PhysX 把一箱玩具 Spot 定格在倾泻半空；水冷池多频波纹与 Beer–Lambert 倒映全场，金属桁架与程序化镂空齿轮标志收尾。脚本：`python/scenes/assembly_hall.py`（2560×1440）。
 
@@ -36,7 +36,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 | ON | OFF |
 |----|-----|
-| ![normal on](outputs/gallery/compare/normal_on.png) | ![normal off](outputs/gallery/compare/normal_off.png) |
+| ![normal on](outputs/gallery/compare/normal_on.heic) | ![normal off](outputs/gallery/compare/normal_off.heic) |
 
 #### Next Event Estimation
 
@@ -44,7 +44,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 | ON | OFF |
 |----|-----|
-| ![nee on](outputs/gallery/compare/nee_on.png) | ![nee off](outputs/gallery/compare/nee_off.png) |
+| ![nee on](outputs/gallery/compare/nee_on.heic) | ![nee off](outputs/gallery/compare/nee_off.heic) |
 
 #### OptiX Denoiser
 
@@ -52,7 +52,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 | ON | OFF |
 |----|-----|
-| ![denoiser on](outputs/gallery/compare/denoiser_on.png) | ![denoiser off](outputs/gallery/compare/denoiser_off.png) |
+| ![denoiser on](outputs/gallery/compare/denoiser_on.heic) | ![denoiser off](outputs/gallery/compare/denoiser_off.heic) |
 
 #### 火焰体积
 
@@ -60,7 +60,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 | ON | OFF |
 |----|-----|
-| ![flame on](outputs/gallery/compare/flame_on.png) | ![flame off](outputs/gallery/compare/flame_off.png) |
+| ![flame on](outputs/gallery/compare/flame_on.heic) | ![flame off](outputs/gallery/compare/flame_off.heic) |
 
 #### Beer-Lambert
 
@@ -68,7 +68,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 | ON | OFF |
 |----|-----|
-| ![beer on](outputs/gallery/compare/beer_on.png) | ![beer off](outputs/gallery/compare/beer_off.png) |
+| ![beer on](outputs/gallery/compare/beer_on.heic) | ![beer off](outputs/gallery/compare/beer_off.heic) |
 
 ---
 
@@ -88,7 +88,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - Procedural water surfaces (`make_water_surface` with analytic normals)
 - Optional mesh **vertex normals** / auto **tangents** (`ensure_mesh_tangents`) for smooth shading and normal maps
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
-- ACES tone map + gamma PNG output
+- HDR HEIC output (PQ / Rec.2020, 10-bit); optional ACES gamma PNG via `.png` path
 
 ## Requirements
 
@@ -111,23 +111,23 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
 
 # Render scenes (PYTHONPATH is set by docker/run.sh)
-./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.png 192 1'
-./docker/run.sh 'python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.png 192 1'
-./docker/run.sh 'python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.png 192 1'
-./docker/run.sh 'python3 /work/python/scenes/gallery_compare.py --feature normal --mode on --out /results/gallery/compare/normal_on.png'
+./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.heic 192 1'
+./docker/run.sh 'python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.heic 192 1'
+./docker/run.sh 'python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.heic 192 1'
+./docker/run.sh 'python3 /work/python/scenes/gallery_compare.py --feature normal --mode on --out /results/gallery/compare/normal_on.heic'
 # Or multi-GPU batch:
 # NRTX_PHYSX_ROOT=/tmp/LumenCore-physx ./scripts/render_gallery.sh
-./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/outdoor_env.py /results/outdoor_env.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/sparky.py /results/sparky.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.png 128 1 1'
-./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/water_pool.py /results/water_pool.png 256 1'
+./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/outdoor_env.py /results/outdoor_env.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/sparky.py /results/sparky.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.heic 128 1 1'
+./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.heic 256 1'
+./docker/run.sh 'python3 /work/python/scenes/water_pool.py /results/water_pool.heic 256 1'
 ```
 
-CLI: `python3 <scene.py> [out.png] [spp] [denoise=1|0]`
+CLI: `python3 <scene.py> [out.heic] [spp] [denoise=1|0]`
 
 `physx_collapse` writes a frame sequence under `<out_stem>/` plus a gallery hero PNG (pick any frame for the homepage).
 
@@ -150,7 +150,7 @@ scene.add_flame_volume(
     time=1.5,
 )
 cam = lc.Camera(eye=(0.5, 0.5, -1.35), lookat=(0.5, 0.5, 0.5), fov_y_deg=40, aspect=1.0)
-cfg = lc.RenderConfig(width=2048, height=2048, spp=64, denoise=True, output_path="out.png")
+cfg = lc.RenderConfig(width=2048, height=2048, spp=64, denoise=True, output_path="out.heic")
 lc.Renderer().render(scene, cam, cfg)
 ```
 
@@ -163,7 +163,7 @@ lc.Renderer().render(scene, cam, cfg)
 | `python/scenes/` | Scene scripts (`atelier`, cover scenes, `gallery_compare`, plus legacy demos) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
-| `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, PNG I/O |
+| `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, HEIC/PNG I/O |
 | `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` (or `PHYSX_INSTALL`) |
 | `scripts/render_gallery.sh` | Multi-GPU gallery showcase + compare renders |
 | `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |
@@ -171,7 +171,7 @@ lc.Renderer().render(scene, cam, cfg)
 | `assets/models` | Character OBJ / MTL / textures |
 | `assets/env` | HDRI environment maps |
 | `outputs/` | Legacy per-scene stills (report chapters) |
-| `outputs/gallery/` | Homepage two-tier gallery (`showcase.png` + `compare/`) |
+| `outputs/gallery/` | Homepage two-tier gallery (`showcase.heic` + `compare/`) |
 
 ## Performance (denoised)
 
@@ -180,7 +180,7 @@ lc.Renderer().render(scene, cam, cfg)
 | gallery showcase (`atelier`) | 2560×1440 | PhysX settle + multi-feature still |
 | gallery covers (`dusk_observatory`, `assembly_hall`) | 2560×1440 | Coastal dusk + factory noon covers |
 | gallery compare (×10) | 1024×1024 | ON/OFF pairs; denoiser uses low spp |
-| Legacy demos (`outputs/*.png`) | 2K class | Still used by `docs/report/` chapters |
+| Legacy demos (`outputs/*.heic`) | 2K class | Still used by `docs/report/` chapters |
 
 Parallel gallery render: `./scripts/render_gallery.sh` (optional `NRTX_PHYSX_ROOT` / `NRTX_GPU` round-robin).
 

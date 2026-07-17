@@ -35,12 +35,16 @@ if(NOT EXISTS "${PHYSX_LIB_DIR}/libPhysX_static_64.a")
     "Run scripts/setup_physx.sh (requires network on first fetch) or set -DPHYSX_ROOT=...")
 endif()
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBHEIF REQUIRED libheif)
+
 add_library(nrtx_host
   src/host/mesh.cpp
   src/host/obj_loader.cpp
   src/host/physx_world.cpp
   src/host/renderer.cpp
   src/host/env_map.cpp
+  src/host/heic_writer.cpp
 )
 target_include_directories(nrtx_host
   PUBLIC
@@ -50,6 +54,8 @@ target_include_directories(nrtx_host
     ${CMAKE_SOURCE_DIR}/third_party
     ${PHYSX_INCLUDE_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
+  PRIVATE
+    ${LIBHEIF_INCLUDE_DIRS}
 )
 target_compile_definitions(nrtx_host PUBLIC PX_PHYSX_STATIC_LIB)
 target_link_libraries(nrtx_host PUBLIC
@@ -63,7 +69,9 @@ target_link_libraries(nrtx_host PUBLIC
   ${PHYSX_LIB_DIR}/libPhysXFoundation_static_64.a
   pthread
   dl
+  ${LIBHEIF_LIBRARIES}
 )
+target_link_directories(nrtx_host PUBLIC ${LIBHEIF_LIBRARY_DIRS})
 set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 
