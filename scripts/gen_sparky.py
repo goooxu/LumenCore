@@ -454,6 +454,130 @@ def paint_atlas(path, size=1024):
     img.save(str(path), "PNG")
 
 
+def _height_to_normal(height, strength=4.0):
+    """Finite-difference height → OpenGL tangent-space normal RGB bytes."""
+    w, h = height.size
+    px = height.load()
+    out = Image.new("RGBA", (w, h))
+    op = out.load()
+    for y in range(h):
+        for x in range(w):
+            l = px[(x - 1) % w, y] / 255.0
+            r = px[(x + 1) % w, y] / 255.0
+            d = px[x, (y + 1) % h] / 255.0
+            u = px[x, (y - 1) % h] / 255.0
+            dx = (l - r) * strength
+            dy = (u - d) * strength  # image y down → flip for +Y up in tangent space
+            dz = 1.0
+            inv = 1.0 / math.sqrt(dx * dx + dy * dy + dz * dz)
+            nx = dx * inv
+            ny = dy * inv
+            nz = dz * inv
+            op[x, y] = (
+                int(max(0, min(255, (nx * 0.5 + 0.5) * 255))),
+                int(max(0, min(255, (ny * 0.5 + 0.5) * 255))),
+                int(max(0, min(255, (nz * 0.5 + 0.5) * 255))),
+                255,
+            )
+    return out
+
+
+def paint_normal_atlas(path, size=1024):
+    """Procedural height features matching albedo atlas regions → sparky_normal.png."""
+    height = Image.new("L", (size, size), 128)
+    draw = ImageDraw.Draw(height)
+
+    def rect(r):
+        u0, v0, u1, v1 = r
+        x0 = int(u0 * size)
+        x1 = int(u1 * size)
+        y0 = int((1.0 - v1) * size)
+        y1 = int((1.0 - v0) * size)
+        return x0, y0, x1, y1
+
+    # Soft panel grid on solid body UVs
+    sx0, sy0, sx1, sy1 = rect(R_SOLID)
+    draw.rectangle([sx0, sy0, sx1, sy1], fill=128)
+    step = max(8, (sx1 - sx0) // 16)
+    for x in range(sx0, sx1, step):
+        draw.line([(x, sy0), (x, sy1)], fill=110, width=2)
+    for y in range(sy0, sy1, step):
+        draw.line([(sx0, y), (sx1, y)], fill=110, width=2)
+    # Bevel frame
+    draw.rectangle([sx0 + 4, sy0 + 4, sx1 - 4, sy1 - 4], outline=170, width=6)
+    draw.rectangle([sx0 + 12, sy0 + 12, sx1 - 12, sy1 - 12], outline=90, width=3)
+
+    # Face screen: raised bezel + recessed pixels
+    fx0, fy0, fx1, fy1 = rect(R_FACE)
+    draw.rectangle([fx0, fy0, fx1, fy1], fill=100)
+    draw.rectangle([fx0 + 8, fy0 + 8, fx1 - 8, fy1 - 8], fill=140)
+    fw, fh = fx1 - fx0, fy1 - fy0
+    ew, eh = int(fw * 0.10), int(fh * 0.28)
+    ey = fy0 + int(fh * 0.28)
+    for ex in (0.32, 0.68):
+        ecx = fx0 + int(fw * ex)
+        draw.rectangle([ecx - ew // 2, ey, ecx + ew // 2, ey + eh], fill=200)
+    smile_y = fy0 + int(fh * 0.68)
+    draw.rectangle(
+        [fx0 + int(fw * 0.28), smile_y, fx1 - int(fw * 0.28), smile_y + int(fh * 0.08)],
+        fill=190,
+    )
+
+    # Chest screen: circular emboss + lettering ridge
+    cx0, cy0, cx1, cy1 = rect(R_CHEST)
+    draw.rectangle([cx0, cy0, cx1, cy1], fill=105)
+    draw.rectangle([cx0 + 10, cy0 + 10, cx1 - 10, cy1 - 10], fill=135)
+    cw, ch = cx1 - cx0, cy1 - cy0
+    ccx = (cx0 + cx1) // 2
+    ccy = cy0 + int(ch * 0.38)
+    cr = int(min(cw, ch) * 0.22)
+    draw.ellipse([ccx - cr - 4, ccy - cr - 4, ccx + cr + 4, ccy + cr + 4], fill=175)
+    draw.ellipse([ccx - cr + 4, ccy - cr + 4, ccx + cr - 4, ccy + cr - 4], fill=120)
+    try:
+        font = ImageFont.truetype(
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf", size=max(28, ch // 8)
+        )
+    except Exception:
+        try:
+            font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size=max(28, ch // 8)
+            )
+        except Exception:
+            font = ImageFont.load_default()
+    label = "SPARKY"
+    if hasattr(draw, "textbbox"):
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw = bbox[2] - bbox[0]
+    else:
+        tw, _ = draw.textsize(label, font=font)
+    draw.text((ccx - tw // 2, cy0 + int(ch * 0.72)), label, fill=200, font=font)
+
+    # Palm heart: raised badge
+    hx0, hy0, hx1, hy1 = rect(R_HEART)
+    draw.rectangle([hx0, hy0, hx1, hy1], fill=130)
+    pad = int((hx1 - hx0) * 0.15)
+    draw.rounded_rectangle(
+        [hx0 + pad, hy0 + pad, hx1 - pad, hy1 - pad], radius=12, fill=180, outline=90, width=4
+    )
+    mx = (hx0 + hx1) // 2
+    my = (hy0 + hy1) // 2
+    s = int((hx1 - hx0) * 0.12)
+    draw.ellipse([mx - 2 * s, my - s, mx, my + s], fill=210)
+    draw.ellipse([mx, my - s, mx + 2 * s, my + s], fill=210)
+    draw.polygon([(mx - 2 * s, my), (mx + 2 * s, my), (mx, my + 2 * s + 4)], fill=210)
+
+    # Slight blur softens stair-steps before derivative
+    try:
+        from PIL import ImageFilter
+
+        height = height.filter(ImageFilter.GaussianBlur(radius=1.2))
+    except Exception:
+        pass
+
+    nmap = _height_to_normal(height, strength=12.0)
+    nmap.save(str(path), "PNG")
+
+
 def write_obj(model, obj_path, mtl_name):
     with obj_path.open("w", encoding="utf-8") as f:
         f.write("# Sparky - boxy tread robot for LumenCore\n")
@@ -510,12 +634,15 @@ def main():
         print("WARNING: triangle count {} outside soft target".format(tris))
 
     albedo = "sparky_albedo.png"
+    normal = "sparky_normal.png"
     paint_atlas(OUT_DIR / albedo, 1024)
+    paint_normal_atlas(OUT_DIR / normal, 1024)
     write_mtl(OUT_DIR / "sparky.mtl", albedo)
     write_obj(model, OUT_DIR / "sparky.obj", "sparky.mtl")
     print("Wrote {}".format(OUT_DIR / "sparky.obj"))
     print("Wrote {}".format(OUT_DIR / "sparky.mtl"))
     print("Wrote {}".format(OUT_DIR / albedo))
+    print("Wrote {}".format(OUT_DIR / normal))
     return 0
 
 

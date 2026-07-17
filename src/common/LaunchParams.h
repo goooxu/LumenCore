@@ -28,7 +28,7 @@ struct MaterialGPU {
   int flags;
   int volume_index;
   int albedo_tex; // -1 = none
-  int pad;
+  int normal_tex; // -1 = none (tangent-space)
 };
 
 struct TextureGPU {
@@ -113,7 +113,8 @@ struct LaunchParams {
 struct HitGroupData {
   float3 *vertices;
   float2 *texcoords;
-  float3 *normals; // may be null → use geometric face normals
+  float3 *normals;  // may be null → use geometric face normals
+  float4 *tangents; // may be null → skip normal mapping (xyz + handedness w)
   int3 *indices;
   int *material_ids;
 };

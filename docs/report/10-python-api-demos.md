@@ -27,7 +27,7 @@ lc.Renderer().render(scene, cam, cfg)
 | 聚光 | `add_spot_light` |
 | 火焰 | `add_flame_volume` |
 | HDRI | `load_env_map` / `clear_env_map` |
-| 纹理 | `add_texture` + `Material.albedo_tex` |
+| 纹理 | `add_texture` + `Material.albedo_tex` / `normal_tex` |
 | 物理 | `PhysXWorld().init()` … |
 
 资源路径：Docker 内常用 `/work/...`；脚本里多用 `resolve_asset(...)` 兼容多种工作目录。
@@ -50,7 +50,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 ![Fireplace](../../outputs/fireplace.png)
 
-火焰体积 + 暗环境 + 多种吉祥物材质。脚本：`fireplace.py`。
+火焰体积 + 暗环境 + 多种吉祥物材质（Sparky 用法线贴图）。脚本：`fireplace.py`。
 
 ### PhysX Collapse — 双栈
 
@@ -68,7 +68,7 @@ GPU 刚体 + IAS 实例变换 + 玻璃火球。脚本：`physx_collapse.py`。
 
 ![Sparky](../../outputs/sparky.png)
 
-OBJ + 纹理 + 聚光。脚本：`sparky.py`。
+OBJ + albedo / **法线贴图** + 聚光。脚本：`sparky.py`。
 
 ## 小结
 

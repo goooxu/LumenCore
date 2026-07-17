@@ -575,15 +575,20 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     CudaBuffer<float3> vertices;
     CudaBuffer<float2> texcoords;
     CudaBuffer<float3> normals;
+    CudaBuffer<float4> tangents;
     CudaBuffer<int3> indices;
     CudaBuffer<int> mat_ids;
     OptixTraversableHandle gas = 0;
     bool any_normals = false;
+    bool any_tangents = false;
   };
 
-  auto upload_mesh = [&](const Mesh &mesh, MeshDevice &dev) {
+  auto upload_mesh = [&](const Mesh &mesh_in, MeshDevice &dev) {
+    Mesh mesh = mesh_in;
+    ensure_mesh_tangents(mesh); // also fills missing vertex normals
     std::vector<float2> texcoords;
     std::vector<float3> normals;
+    std::vector<float4> tangents;
     if (mesh.texcoords.size() == mesh.vertices.size()) {
       texcoords = mesh.texcoords;
     } else {
@@ -595,11 +600,18 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     } else {
       normals.assign(mesh.vertices.size(), make_float3(0.0f, 0.0f, 0.0f));
     }
+    if (mesh.tangents.size() == mesh.vertices.size()) {
+      tangents = mesh.tangents;
+      dev.any_tangents = true;
+    }
     dev.gas = impl_->build_gas(mesh.vertices, mesh.indices, dev.vertices, dev.indices);
     dev.texcoords.upload(texcoords);
     dev.mat_ids.upload(mesh.material_ids);
     if (dev.any_normals) {
       dev.normals.upload(normals);
+    }
+    if (dev.any_tangents) {
+      dev.tangents.upload(tangents);
     }
   };
 
@@ -608,6 +620,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     hit.vertices = dev.vertices.ptr;
     hit.texcoords = dev.texcoords.ptr;
     hit.normals = dev.any_normals ? dev.normals.ptr : nullptr;
+    hit.tangents = dev.any_tangents ? dev.tangents.ptr : nullptr;
     hit.indices = dev.indices.ptr;
     hit.material_ids = dev.mat_ids.ptr;
     return hit;
@@ -681,6 +694,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
         merged.normals.insert(merged.normals.end(), mesh.vertices.size(),
                               make_float3(0.0f, 0.0f, 0.0f));
       }
+      // Tangents recomputed on the merged mesh in upload_mesh.
       for (size_t i = 0; i < mesh.indices.size(); ++i) {
         const int3 idx = mesh.indices[i];
         merged.indices.push_back(make_int3(idx.x + base, idx.y + base, idx.z + base));
@@ -690,6 +704,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     if (!any_normals) {
       merged.normals.clear();
     }
+    merged.tangents.clear();
     mesh_devs.resize(1);
     upload_mesh(merged, mesh_devs[0]);
     hit_datas.push_back(make_hit(mesh_devs[0]));
@@ -710,7 +725,18 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     materials_gpu[i].flags = m.flags;
     materials_gpu[i].volume_index = m.volume_index;
     materials_gpu[i].albedo_tex = m.albedo_tex;
-    materials_gpu[i].pad = 0;
+    materials_gpu[i].normal_tex = m.normal_tex;
+  }
+  {
+    int nmap_count = 0;
+    for (const MaterialGPU &m : materials_gpu) {
+      if (m.normal_tex >= 0) {
+        ++nmap_count;
+      }
+    }
+    if (nmap_count > 0) {
+      std::cout << "Normal maps: " << nmap_count << " materials\n";
+    }
   }
   CudaBuffer<MaterialGPU> d_materials;
   d_materials.upload(materials_gpu);

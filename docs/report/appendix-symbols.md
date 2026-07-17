@@ -37,7 +37,8 @@
 | 辐射亮度 | Radiance |
 | 色调映射 | Tone mapping |
 | 刚体动力学 | Rigid-body dynamics |
-| 加速结构 | Acceleration structure |
+| 法线贴图 | Normal map |
+| 切线空间 | Tangent space |
 | 降噪 | Denoising |
 
 ## 本仓库关键文件速查

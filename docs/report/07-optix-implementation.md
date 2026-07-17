@@ -50,7 +50,7 @@ flowchart TB
 - **静态 / 无 instance**：行为与旧版相同，合并顶点后建一个 GAS，`LaunchParams.handle` 指向它。
 - **有 `Scene.add_instance`**：每个 `meshes[i]` 是物体空间原型并建独立 GAS；实例的 `sbtOffset = mesh_index * RAY_TYPE_COUNT`；根句柄为 IAS。未挂 instance 的网格（如火焰代理盒、面光四边形）自动补 **单位变换** instance。
 
-着色里顶点在物体空间；`optixTransformPointFromObjectToWorldSpace` / `TransformNormal...` 已用于法线与交点（`shaders.cu`），因此 IAS 与单 GAS 共用同一套 closesthit。
+着色里顶点在物体空间；`optixTransformPointFromObjectToWorldSpace` / `TransformNormal...` 已用于法线与交点（`shaders.cu`），因此 IAS 与单 GAS 共用同一套 closesthit。上传前 `ensure_mesh_tangents` 会补顶点法线与切线；`HitGroupData` 带 `tangents`，供 `normal_tex` 用法线贴图。
 
 ## 两种射线类型
 

@@ -84,7 +84,9 @@ def main() -> int:
 
     # --- Mascots with different material looks ---------------------------------
     albedo_path = resolve_asset("assets/models/sparky_albedo.png")
+    normal_path = resolve_asset("assets/models/sparky_normal.png")
     tex = scene.add_texture(albedo_path)
+    nmap = scene.add_texture(normal_path)
 
     # Sparky A: stock plastic / screen look
     glass_a = scene.add_material(
@@ -92,24 +94,44 @@ def main() -> int:
     )
     screen_face_a = scene.add_material(
         lc.Material(
-            base_color=(1.0, 1.0, 1.0), roughness=0.25, emission=(0.35, 0.7, 0.85), albedo_tex=tex
+            base_color=(1.0, 1.0, 1.0),
+            roughness=0.25,
+            emission=(0.35, 0.7, 0.85),
+            albedo_tex=tex,
+            normal_tex=nmap,
         )
     )
     screen_chest_a = scene.add_material(
         lc.Material(
-            base_color=(1.0, 1.0, 1.0), roughness=0.35, emission=(0.1, 0.35, 0.12), albedo_tex=tex
+            base_color=(1.0, 1.0, 1.0),
+            roughness=0.35,
+            emission=(0.1, 0.35, 0.12),
+            albedo_tex=tex,
+            normal_tex=nmap,
         )
     )
     screen_palm_a = scene.add_material(
-        lc.Material(base_color=(1.0, 1.0, 1.0), roughness=0.45, albedo_tex=tex)
+        lc.Material(
+            base_color=(1.0, 1.0, 1.0), roughness=0.45, albedo_tex=tex, normal_tex=nmap
+        )
     )
-    plastic_blue = scene.add_material(lc.Material(base_color=(0.32, 0.62, 0.88), roughness=0.4))
-    plastic_white = scene.add_material(lc.Material(base_color=(0.92, 0.93, 0.95), roughness=0.35))
+    plastic_blue = scene.add_material(
+        lc.Material(base_color=(0.32, 0.62, 0.88), roughness=0.4, normal_tex=nmap)
+    )
+    plastic_white = scene.add_material(
+        lc.Material(base_color=(0.92, 0.93, 0.95), roughness=0.35, normal_tex=nmap)
+    )
     metal_grey = scene.add_material(
-        lc.Material(base_color=(0.55, 0.57, 0.60), metallic=0.7, roughness=0.28)
+        lc.Material(
+            base_color=(0.55, 0.57, 0.60), metallic=0.7, roughness=0.28, normal_tex=nmap
+        )
     )
-    accent_orange = scene.add_material(lc.Material(base_color=(0.95, 0.45, 0.12), roughness=0.4))
-    tread_orange = scene.add_material(lc.Material(base_color=(0.95, 0.38, 0.08), roughness=0.55))
+    accent_orange = scene.add_material(
+        lc.Material(base_color=(0.95, 0.45, 0.12), roughness=0.4, normal_tex=nmap)
+    )
+    tread_orange = scene.add_material(
+        lc.Material(base_color=(0.95, 0.38, 0.08), roughness=0.55, normal_tex=nmap)
+    )
     emit_yellow = scene.add_material(
         lc.Material(base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(2.2, 1.5, 0.3))
     )
@@ -131,17 +153,27 @@ def main() -> int:
         lc.Material(base_color=(0.35, 0.4, 0.45), roughness=0.05, transmission=0.85, ior=1.52)
     )
     chrome = scene.add_material(
-        lc.Material(base_color=(0.94, 0.95, 0.98), metallic=1.0, roughness=0.08)
+        lc.Material(
+            base_color=(0.94, 0.95, 0.98), metallic=1.0, roughness=0.08, normal_tex=nmap
+        )
     )
     chrome_dark = scene.add_material(
-        lc.Material(base_color=(0.35, 0.36, 0.38), metallic=1.0, roughness=0.22)
+        lc.Material(
+            base_color=(0.35, 0.36, 0.38), metallic=1.0, roughness=0.22, normal_tex=nmap
+        )
     )
     copper = scene.add_material(
-        lc.Material(base_color=(0.85, 0.42, 0.18), metallic=1.0, roughness=0.18)
+        lc.Material(
+            base_color=(0.85, 0.42, 0.18), metallic=1.0, roughness=0.18, normal_tex=nmap
+        )
     )
     screen_chrome = scene.add_material(
         lc.Material(
-            base_color=(1.0, 1.0, 1.0), roughness=0.2, emission=(1.8, 0.55, 0.2), albedo_tex=tex
+            base_color=(1.0, 1.0, 1.0),
+            roughness=0.2,
+            emission=(1.8, 0.55, 0.2),
+            albedo_tex=tex,
+            normal_tex=nmap,
         )
     )
     sparky_chrome = {

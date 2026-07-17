@@ -5,6 +5,19 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-07-17
+
+### Added
+
+- **Tangent-space normal mapping**: `Material.normal_tex` + per-vertex tangents (`Mesh.tangents` / `ensure_mesh_tangents`) uploaded in `HitGroupData`
+- `sparky_normal.png` atlas (from `scripts/gen_sparky.py`) wired into `sparky`, `fireplace`, `water_pool`, and `physx_collapse` Sparky materials
+
+### Changed
+
+- Host upload computes missing vertex normals and Mikkt-style tangents before GAS/SBT build
+- Shading uses mapped normals for BSDF/NEE; geometric normals still decide front/back faces
+- Docs/report 01/04/07/08/10 + README updated for normal maps; gallery Sparky/Fireplace re-rendered
+
 ## [0.12.0] - 2026-07-17
 
 ### Added

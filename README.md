@@ -18,7 +18,7 @@ Metal roughness row + metallic color row + **glass roughness row** under an impo
 
 ![Fireplace](outputs/fireplace.png)
 
-Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. **Sparky** and **Capsule Mascot** sit by the fire in plastic / chrome / yellow / glass material variants.
+Dark stone hearth lit almost entirely by a **procedural flame volume** (noise density + ray-marched emission/absorption) with a warm NEE proxy light. **Sparky** (albedo + **normal map**) and **Capsule Mascot** sit by the fire in plastic / chrome / yellow / glass material variants.
 
 ### PhysX Collapse
 
@@ -48,7 +48,7 @@ Open ground scene with chrome and glass props lit primarily by HDRI, soft fill l
 
 ![Sparky](outputs/sparky.png)
 
-Studio duo: **Sparky** beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`, CC0).
+Studio duo: **Sparky** (albedo + **tangent-space normal map**) beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`, CC0).
 
 ### Water Pool
 
@@ -68,11 +68,11 @@ Open deep water with a **calm procedural surface** (`make_water_surface` + analy
 - **HDRI env maps** (`Scene.load_env_map`) with CDF importance sampling and balance MIS
 - Triangle-mesh **GAS** + optional **IAS** instancing on OptiX RT Cores
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
-- Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
+- Albedo + **tangent-space normal** textures (`Scene.add_texture`, `Material.albedo_tex` / `normal_tex`)
 - Spot lights (`Scene.add_spot_light`)
 - Dielectric **Beer-Lambert absorption** (`Material.absorption`) for water / tinted glass
 - Procedural water surfaces (`make_water_surface` with analytic normals)
-- Optional mesh **vertex normals** for smooth shading
+- Optional mesh **vertex normals** / auto **tangents** (`ensure_mesh_tangents`) for smooth shading and normal maps
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
 - ACES tone map + gamma PNG output
 

@@ -195,15 +195,60 @@ __forceinline__ __device__ float3 sample_albedo_tex(const nrtx::TextureGPU &tex,
   return nrtx::lerp(c0, c1, fy);
 }
 
+__forceinline__ __device__ float2 interpolate_uv(const nrtx::HitGroupData *hit_data,
+                                                 const int3 &index, const float2 &bary) {
+  const float2 uv0 = hit_data->texcoords[index.x];
+  const float2 uv1 = hit_data->texcoords[index.y];
+  const float2 uv2 = hit_data->texcoords[index.z];
+  return (1.0f - bary.x - bary.y) * uv0 + bary.x * uv1 + bary.y * uv2;
+}
+
+/** Decode tangent-space normal map and return object-space shading normal. */
+__forceinline__ __device__ float3 apply_normal_map(const nrtx::MaterialGPU &mat,
+                                                   const nrtx::HitGroupData *hit_data,
+                                                   const int3 &index, const float2 &bary,
+                                                   float3 n_obj) {
+  if (mat.normal_tex < 0 || mat.normal_tex >= params.texture_count || !hit_data->texcoords ||
+      !hit_data->tangents) {
+    return n_obj;
+  }
+  const float2 uv = interpolate_uv(hit_data, index, bary);
+  const float3 encoded = sample_albedo_tex(params.textures[mat.normal_tex], uv);
+  // OpenGL-style: RGB [0,1] → tangent-space normal, +Y up.
+  float3 n_ts = make_float3(encoded.x * 2.0f - 1.0f, encoded.y * 2.0f - 1.0f, encoded.z * 2.0f - 1.0f);
+  const float nts_len2 = nrtx::dot(n_ts, n_ts);
+  if (nts_len2 < 1e-8f) {
+    return n_obj;
+  }
+  n_ts = n_ts * rsqrtf(nts_len2);
+
+  const float4 t0 = hit_data->tangents[index.x];
+  const float4 t1 = hit_data->tangents[index.y];
+  const float4 t2 = hit_data->tangents[index.z];
+  const float w0 = 1.0f - bary.x - bary.y;
+  float3 T = make_float3(w0 * t0.x + bary.x * t1.x + bary.y * t2.x,
+                         w0 * t0.y + bary.x * t1.y + bary.y * t2.y,
+                         w0 * t0.z + bary.x * t1.z + bary.y * t2.z);
+  // Re-orthogonalize against interpolated shading normal
+  T = T - n_obj * nrtx::dot(n_obj, T);
+  const float tlen2 = nrtx::dot(T, T);
+  if (tlen2 < 1e-10f) {
+    return n_obj;
+  }
+  T = T * rsqrtf(tlen2);
+  const float hand = (w0 * t0.w + bary.x * t1.w + bary.y * t2.w) >= 0.0f ? 1.0f : -1.0f;
+  const float3 B = nrtx::cross(n_obj, T) * hand;
+  float3 n_mapped = T * n_ts.x + B * n_ts.y + n_obj * n_ts.z;
+  const float nlen2 = nrtx::dot(n_mapped, n_mapped);
+  return nlen2 > 1e-10f ? n_mapped * rsqrtf(nlen2) : n_obj;
+}
+
 __forceinline__ __device__ float3 shaded_base_color(const nrtx::MaterialGPU &mat,
                                                    const nrtx::HitGroupData *hit_data,
                                                    const int3 &index, const float2 &bary) {
   float3 color = mat.base_color;
   if (mat.albedo_tex >= 0 && mat.albedo_tex < params.texture_count && hit_data->texcoords) {
-    const float2 uv0 = hit_data->texcoords[index.x];
-    const float2 uv1 = hit_data->texcoords[index.y];
-    const float2 uv2 = hit_data->texcoords[index.z];
-    const float2 uv = (1.0f - bary.x - bary.y) * uv0 + bary.x * uv1 + bary.y * uv2;
+    const float2 uv = interpolate_uv(hit_data, index, bary);
     color = color * sample_albedo_tex(params.textures[mat.albedo_tex], uv);
   }
   return color;
@@ -589,13 +634,17 @@ extern "C" __global__ void __closesthit__radiance() {
     }
   }
 
+  const nrtx::MaterialGPU mat_peek = params.materials[hit_data->material_ids[prim_idx]];
+  // Shading normal may be perturbed by a tangent-space normal map (object space).
+  n_obj = apply_normal_map(mat_peek, hit_data, index, bary, n_obj);
+
   const float3 p = optixTransformPointFromObjectToWorldSpace(p_obj);
   float3 ng_geom = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_geom));
   float3 ng = nrtx::normalize(optixTransformNormalFromObjectToWorldSpace(n_obj));
 
   const float3 ray_dir = optixGetWorldRayDirection();
   const float3 ray_origin = optixGetWorldRayOrigin();
-  // Face classification uses geometric normal; shading uses interpolated normals.
+  // Face classification uses geometric normal; BSDF / NEE use shading normal (incl. maps).
   const bool front_facing = nrtx::dot(ray_dir, ng_geom) < 0.0f;
   if (nrtx::dot(ng, ng_geom) < 0.0f) {
     ng = -ng;

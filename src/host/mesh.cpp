@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -32,7 +33,92 @@ void ensure_texcoords(Mesh &mesh) {
   mesh.texcoords.assign(mesh.vertices.size(), make_float2(0.0f, 0.0f));
 }
 
+void compute_vertex_normals(Mesh &mesh) {
+  mesh.normals.assign(mesh.vertices.size(), make_float3(0.0f, 0.0f, 0.0f));
+  for (const int3 &idx : mesh.indices) {
+    const float3 &v0 = mesh.vertices[idx.x];
+    const float3 &v1 = mesh.vertices[idx.y];
+    const float3 &v2 = mesh.vertices[idx.z];
+    const float3 fn = cross(v1 - v0, v2 - v0);
+    mesh.normals[idx.x] = mesh.normals[idx.x] + fn;
+    mesh.normals[idx.y] = mesh.normals[idx.y] + fn;
+    mesh.normals[idx.z] = mesh.normals[idx.z] + fn;
+  }
+  for (float3 &n : mesh.normals) {
+    const float len2 = dot(n, n);
+    n = len2 > 1e-20f ? normalize(n) : make_float3(0.0f, 1.0f, 0.0f);
+  }
+}
+
 } // namespace
+
+void ensure_mesh_tangents(Mesh &mesh) {
+  if (mesh.vertices.empty() || mesh.indices.empty()) {
+    return;
+  }
+  ensure_texcoords(mesh);
+  if (mesh.normals.size() != mesh.vertices.size()) {
+    compute_vertex_normals(mesh);
+  }
+  if (mesh.tangents.size() == mesh.vertices.size()) {
+    return;
+  }
+
+  const size_t nverts = mesh.vertices.size();
+  std::vector<float3> tan1(nverts, make_float3(0.0f, 0.0f, 0.0f));
+  std::vector<float3> tan2(nverts, make_float3(0.0f, 0.0f, 0.0f));
+
+  for (const int3 &idx : mesh.indices) {
+    const float3 &v0 = mesh.vertices[idx.x];
+    const float3 &v1 = mesh.vertices[idx.y];
+    const float3 &v2 = mesh.vertices[idx.z];
+    const float2 &w0 = mesh.texcoords[idx.x];
+    const float2 &w1 = mesh.texcoords[idx.y];
+    const float2 &w2 = mesh.texcoords[idx.z];
+
+    const float3 e1 = v1 - v0;
+    const float3 e2 = v2 - v0;
+    const float du1 = w1.x - w0.x;
+    const float dv1 = w1.y - w0.y;
+    const float du2 = w2.x - w0.x;
+    const float dv2 = w2.y - w0.y;
+    const float det = du1 * dv2 - du2 * dv1;
+    if (fabsf(det) < 1e-12f) {
+      continue;
+    }
+    const float r = 1.0f / det;
+    const float3 sdir = (e1 * dv2 - e2 * dv1) * r;
+    const float3 tdir = (e2 * du1 - e1 * du2) * r;
+    tan1[idx.x] = tan1[idx.x] + sdir;
+    tan1[idx.y] = tan1[idx.y] + sdir;
+    tan1[idx.z] = tan1[idx.z] + sdir;
+    tan2[idx.x] = tan2[idx.x] + tdir;
+    tan2[idx.y] = tan2[idx.y] + tdir;
+    tan2[idx.z] = tan2[idx.z] + tdir;
+  }
+
+  mesh.tangents.resize(nverts);
+  for (size_t i = 0; i < nverts; ++i) {
+    float3 n = mesh.normals[i];
+    float3 t = tan1[i];
+    // Gram-Schmidt
+    t = t - n * dot(n, t);
+    const float tlen2 = dot(t, t);
+    if (tlen2 > 1e-12f) {
+      t = t * (1.0f / sqrtf(tlen2));
+    } else {
+      // Build any tangent orthogonal to n
+      const float3 a = fabsf(n.x) > 0.9f ? make_float3(0.0f, 1.0f, 0.0f)
+                                         : make_float3(1.0f, 0.0f, 0.0f);
+      t = normalize(cross(n, a));
+    }
+    float handedness = 1.0f;
+    if (dot(cross(n, t), tan2[i]) < 0.0f) {
+      handedness = -1.0f;
+    }
+    mesh.tangents[i] = make_float4(t.x, t.y, t.z, handedness);
+  }
+}
 
 Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int material_id) {
   Mesh mesh;
@@ -194,6 +280,8 @@ Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose) {
   for (float3 &n : out.normals) {
     n = normalize(rotate_by_quat(n, pose.quat));
   }
+  // Tangents would be stale after pose; recompute on upload via ensure_mesh_tangents.
+  out.tangents.clear();
   return out;
 }
 

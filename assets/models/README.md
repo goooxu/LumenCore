@@ -1,6 +1,6 @@
 # Models
 
-- `sparky.obj` / `sparky.mtl` / `sparky_albedo.png` — original **Sparky** boxy tread robot (~7k triangles): glass visor + pixel face, blue/white body, chest screen with **SPARKY** label, accordion arms, orange treads.
+- `sparky.obj` / `sparky.mtl` / `sparky_albedo.png` / `sparky_normal.png` — original **Sparky** boxy tread robot (~7k triangles): glass visor + pixel face, blue/white body, chest screen with **SPARKY** label, accordion arms, orange treads. Albedo + tangent-space normal atlas share UV layout.
 - `capsule_mascot.obj` / `capsule_mascot.mtl` — original **Capsule Mascot** (~5.8k triangles, CC0): warm yellow capsule body with visor, eyes, belt, gloves/boots, and antenna. Groups exported as `usemtl` for multi-material scenes.
 
 Water surfaces are generated at runtime via `lumencore.make_water_surface(...)` (no baked water OBJ).

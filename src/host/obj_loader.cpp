@@ -186,6 +186,8 @@ Mesh transform_mesh(const Mesh &input, const float3 &translate, const float3 &sc
       n = normalize(rotate(n));
     }
   }
+  // Tangents rebuilt on GPU upload after transforms.
+  out.tangents.clear();
   return out;
 }
 

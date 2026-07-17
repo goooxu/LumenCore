@@ -39,7 +39,7 @@
 | Fireplace | `outputs/fireplace.png` | 火焰体积、暗场景、吉祥物材质 |
 | PhysX Collapse | `outputs/physx_collapse.png` | GPU 刚体 + OptiX IAS 实例化 |
 | Water Pool | `outputs/water_pool.png` | Beer-Lambert、水面法线 |
-| Sparky | `outputs/sparky.png` | OBJ / 纹理 / 聚光灯 |
+| Sparky | `outputs/sparky.png` | OBJ / albedo+法线贴图 / 聚光灯 |
 
 ## 配图说明
 
@@ -48,4 +48,4 @@
 
 ---
 
-*版本对应 LumenCore ≈ 0.12.x。报告描述以当前源码为准；未实现特性（如 BDPT、完整光谱、玻璃 NEE）不会假装写进去。*
+*版本对应 LumenCore ≈ 0.13.x。报告描述以当前源码为准；未实现特性（如 BDPT、完整光谱、玻璃 NEE）不会假装写进去。*

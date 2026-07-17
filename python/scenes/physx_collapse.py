@@ -69,31 +69,53 @@ def _scale_mascot_to_brick(mesh: lc.Mesh, model_height: float, model_ymin: float
 def _register_mascot_materials(scene: lc.Scene) -> tuple[dict[str, int], dict[str, int], int, int]:
     """Register Sparky / Capsule materials in a fixed order (IDs must match cached meshes)."""
     albedo_path = resolve_asset("assets/models/sparky_albedo.png")
+    normal_path = resolve_asset("assets/models/sparky_normal.png")
     tex = scene.add_texture(albedo_path)
+    nmap = scene.add_texture(normal_path)
 
     glass = scene.add_material(
         lc.Material(base_color=(0.65, 0.85, 1.0), roughness=0.02, transmission=0.92, ior=1.45)
     )
     screen_face = scene.add_material(
         lc.Material(
-            base_color=(1.0, 1.0, 1.0), roughness=0.25, emission=(0.25, 0.55, 0.65), albedo_tex=tex
+            base_color=(1.0, 1.0, 1.0),
+            roughness=0.25,
+            emission=(0.25, 0.55, 0.65),
+            albedo_tex=tex,
+            normal_tex=nmap,
         )
     )
     screen_chest = scene.add_material(
         lc.Material(
-            base_color=(1.0, 1.0, 1.0), roughness=0.35, emission=(0.08, 0.28, 0.1), albedo_tex=tex
+            base_color=(1.0, 1.0, 1.0),
+            roughness=0.35,
+            emission=(0.08, 0.28, 0.1),
+            albedo_tex=tex,
+            normal_tex=nmap,
         )
     )
     screen_palm = scene.add_material(
-        lc.Material(base_color=(1.0, 1.0, 1.0), roughness=0.45, albedo_tex=tex)
+        lc.Material(
+            base_color=(1.0, 1.0, 1.0), roughness=0.45, albedo_tex=tex, normal_tex=nmap
+        )
     )
-    plastic_blue = scene.add_material(lc.Material(base_color=(0.32, 0.62, 0.88), roughness=0.4))
-    plastic_white = scene.add_material(lc.Material(base_color=(0.92, 0.93, 0.95), roughness=0.35))
+    plastic_blue = scene.add_material(
+        lc.Material(base_color=(0.32, 0.62, 0.88), roughness=0.4, normal_tex=nmap)
+    )
+    plastic_white = scene.add_material(
+        lc.Material(base_color=(0.92, 0.93, 0.95), roughness=0.35, normal_tex=nmap)
+    )
     metal_grey = scene.add_material(
-        lc.Material(base_color=(0.55, 0.57, 0.60), metallic=0.7, roughness=0.28)
+        lc.Material(
+            base_color=(0.55, 0.57, 0.60), metallic=0.7, roughness=0.28, normal_tex=nmap
+        )
     )
-    accent_orange = scene.add_material(lc.Material(base_color=(0.95, 0.45, 0.12), roughness=0.4))
-    tread_orange = scene.add_material(lc.Material(base_color=(0.95, 0.38, 0.08), roughness=0.55))
+    accent_orange = scene.add_material(
+        lc.Material(base_color=(0.95, 0.45, 0.12), roughness=0.4, normal_tex=nmap)
+    )
+    tread_orange = scene.add_material(
+        lc.Material(base_color=(0.95, 0.38, 0.08), roughness=0.55, normal_tex=nmap)
+    )
     emit_yellow = scene.add_material(
         lc.Material(base_color=(1.0, 0.9, 0.3), roughness=0.3, emission=(1.8, 1.3, 0.25))
     )

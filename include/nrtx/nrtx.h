@@ -15,7 +15,9 @@ namespace nrtx {
 struct Mesh {
   std::vector<float3> vertices;
   std::vector<float2> texcoords; // parallel to vertices (may be empty → treated as 0,0)
-  std::vector<float3> normals;   // parallel to vertices (may be empty → face normals)
+  std::vector<float3> normals;   // parallel to vertices (may be empty → face / computed)
+  // xyz = tangent, w = bitangent handedness (±1). Filled by ensure_mesh_tangents if empty.
+  std::vector<float4> tangents;
   std::vector<int3> indices;
   std::vector<int> material_ids;
 };
@@ -37,6 +39,7 @@ struct Material {
   int flags = MATERIAL_FLAG_NONE;
   int volume_index = -1;
   int albedo_tex = -1; // index into Scene::textures, -1 = solid base_color
+  int normal_tex = -1; // tangent-space normal map, -1 = none
 };
 
 struct Camera {
@@ -170,5 +173,8 @@ Mesh apply_pose_to_mesh(const Mesh &input, const Pose &pose);
 Mesh apply_pose_to_box_mesh(const float3 &half_extents, const Pose &pose, int material_id);
 Mesh apply_pose_to_sphere_mesh(float radius, const Pose &pose, int material_id, int slices = 32,
                                int stacks = 16);
+
+/** Fill missing vertex normals (area-weighted) and Mikkt-style tangents (float4.w = handedness). */
+void ensure_mesh_tangents(Mesh &mesh);
 
 } // namespace nrtx

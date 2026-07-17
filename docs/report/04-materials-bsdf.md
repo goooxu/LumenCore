@@ -21,6 +21,7 @@ Python / C++ 的 `Material` 大致包括：
 | `emission` | 自发光 |
 | `absorption` | 介质 Beer-Lambert 吸收 |
 | `albedo_tex` | 可选漫反射纹理 |
+| `normal_tex` | 可选切线空间法线贴图（OpenGL 约定，RGB→[-1,1]） |
 
 不透明路径走 GGX；`transmission` 高则走 **GGX 微表面电介质**（粗糙透射/反射），仍支持 Beer-Lambert 吸收。
 
@@ -85,6 +86,20 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 
 首版玻璃路径**不做**与面光/HDRI 的 NEE/MIS（与旧理想玻璃策略一致），避免双计。
 
+## 法线贴图（切线空间）
+
+当 `normal_tex >= 0` 且网格有 UV / 切线时：
+
+1. 主机侧 `ensure_mesh_tangents` 补全顶点法线，并按 Lengyel/Mikkt 风格累积切线（`float4.w` = 手性 ±1）。
+2. closesthit 插值 $T$、$N$，算 $B = N\times T\cdot w$，把贴图中的切线空间法线变到物体空间，再 `optixTransformNormal...` 到世界空间。
+3. **着色 / NEE / BSDF** 用扰动后的 shading normal；**正反面判定**仍用几何面法线。
+
+Sparky 的 `sparky_normal.png` 与 albedo 共用 UV 图集（面板线、屏框、胸口浮雕等）。演示：`sparky` / `fireplace` / `physx_collapse`。
+
+![Sparky](../../outputs/sparky.png)
+
+图注：右侧 Sparky 使用 albedo + 法线贴图。
+
 ## 代码地图
 
 | 函数 | 文件 | 作用 |
@@ -92,13 +107,15 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 | `eval_opaque_bsdf` | `bsdf.h` | 不透明求值 + pdf |
 | `sample_opaque_bsdf` | `bsdf.h` | 不透明采样 |
 | `sample_dielectric_bsdf` | `bsdf.h` | GGX 玻璃反射/透射采样 |
+| `apply_normal_map` | `shaders.cu` | 切线空间法线 → 着色法线 |
+| `ensure_mesh_tangents` | `mesh.cpp` | 顶点法线 / 切线 |
 | closesthit 玻璃分支 | `shaders.cu` | 调用 dielectric 采样 + 介质 |
-| `Material` | `nrtx.h` / bindings | 主机侧参数 |
+| `Material` | `nrtx.h` / bindings | 主机侧参数（含 `normal_tex`） |
 
 ## 小结
 
-- 不透明：GGX 金属度-粗糙度。
+- 不透明：GGX 金属度-粗糙度；可选法线贴图。
 - 玻璃：GGX 粗糙透射/反射 + 可选吸收。
-- 看 `ggx_studio` 第三排（玻璃粗糙度渐变）最容易对照。
+- 看 `ggx_studio` 第三排（玻璃粗糙度渐变）与 `sparky`（法线）最容易对照。
 
 下一章：[05 NEE、MIS 与 HDRI](05-nee-mis-hdri.md)。
