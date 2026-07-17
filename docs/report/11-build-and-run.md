@@ -16,8 +16,8 @@
 chmod +x docker/run.sh scripts/setup_physx.sh
 ./scripts/setup_physx.sh   # 若尚未有 PhysX 库
 
-# 配置并编译（CMAKE_CUDA_ARCHITECTURES 按本机 GPU 设定）
-./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
+# 配置并编译（未指定时 CMake 用 nvidia-smi 探测 compute capability；可用 -DCMAKE_CUDA_ARCHITECTURES= 覆盖）
+./docker/run.sh 'cmake -S /work -B /out && cmake --build /out -j$(nproc)'
 
 # 渲染示例
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.heic 256 1'

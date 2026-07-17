@@ -67,7 +67,7 @@ if [[ -z "${HOST_LIB_DIR}" ]]; then
   exit 1
 fi
 
-# PhysX GPU .so: prefer NRTX_PHYSX_ROOT (machine-local aarch64 builds), else repo vendored.
+# PhysX GPU .so: prefer NRTX_PHYSX_ROOT (host-local install), else repo vendored.
 if [[ -n "${NRTX_PHYSX_ROOT:-}" ]]; then
   PHYSX_ROOT_HOST="${NRTX_PHYSX_ROOT}"
 else
@@ -83,7 +83,7 @@ fi
 LD_EXTRA="${PHYSX_BIN_IN_CT}:${HOST_LIB_DIR}"
 
 # NFS scratch is often not writable as root inside Docker; build/output stay on local disk.
-# Mount driver OptiX/RTX libraries — stock CUDA images do not ship them.
+# Mount OptiX / RT-Core driver libraries — stock CUDA images do not ship them.
 # Do NOT bind-mount libnvoptix.so.1: nvidia-container-toolkit already injects it
 # and a duplicate mount causes "device or resource busy".
 # libnvidia-rtcore is usually NOT injected — mount the host versioned .so.

@@ -15,13 +15,14 @@ if [[ "${NUM_GPUS}" -lt 1 ]]; then
   NUM_GPUS=1
 fi
 
-# Default arch: detect from first GPU compute_cap (e.g. 12.0 → 120, 10.0 → 100).
+# Default arch: detect from first GPU compute_cap (X.Y → XY). No SKU-specific fallback.
 if [[ -z "${NRTX_CUDA_ARCH:-}" ]]; then
   CAP="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d ' ')"
   if [[ "${CAP}" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
     CUDA_ARCH="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
   else
-    CUDA_ARCH=120
+    echo "error: could not detect GPU compute capability; set NRTX_CUDA_ARCH (e.g. 89)" >&2
+    exit 1
   fi
 else
   CUDA_ARCH="${NRTX_CUDA_ARCH}"
@@ -33,7 +34,7 @@ COMPARE_WIDTH="${COMPARE_WIDTH:-1024}"
 
 HOST_OUT="${NRTX_OUT_DIR:-/tmp/LumenCore-out}"
 HOST_BUILD="${NRTX_BUILD_DIR:-/tmp/LumenCore-build}"
-# Optional machine-local PhysX (e.g. aarch64 build at /tmp/LumenCore-physx).
+# Optional machine-local PhysX install (when repo-vendored libs do not match the host).
 PHYSX_ROOT="${NRTX_PHYSX_ROOT:-}"
 REPO_GALLERY="${ROOT}/outputs/gallery"
 mkdir -p "${HOST_OUT}/gallery/compare" "${REPO_GALLERY}/compare"

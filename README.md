@@ -108,7 +108,8 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./scripts/setup_physx.sh
 
 # Configure + build Python module → /tmp/LumenCore-build/python/lumencore*.so
-./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
+# CMake auto-detects compute capability from the GPU (override with -DCMAKE_CUDA_ARCHITECTURES=...).
+./docker/run.sh 'cmake -S /work -B /out && cmake --build /out -j$(nproc)'
 
 # Render scenes (PYTHONPATH is set by docker/run.sh)
 ./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.heic 192 1'

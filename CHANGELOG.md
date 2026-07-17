@@ -17,6 +17,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - All scene defaults and Gallery paths use `.heic`
 - README / report Markdown image links point at `.heic`
 - **PNG render output removed**: only `.heic` / `.heif` accepted; ACES/`stb_image_write` path deleted
+- CMake / gallery scripts auto-detect `CMAKE_CUDA_ARCHITECTURES` from `nvidia-smi` (no hardcoded GPU SKU/arch fallback)
 
 ## [0.15.0] - 2026-07-17
 
@@ -249,7 +250,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Next Event Estimation, Russian Roulette, simplified PBR materials
 - Triangle-mesh GAS, progressive accumulation, OptiX Denoiser
 - Example scenes: `cornell`, `materials_ball`, `outdoor_env`
-- Docker-based build/run helper for RTX GPUs
+- Docker-based build/run helper for NVIDIA GPUs with RT Cores
 
 [0.9.1]: https://github.com/goooxu/LumenCore/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/goooxu/LumenCore/compare/v0.8.2...v0.9.0

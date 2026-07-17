@@ -6,8 +6,31 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 120)
+# Prefer an explicit -DCMAKE_CUDA_ARCHITECTURES=...; otherwise detect from the first GPU.
+# Any NVIDIA GPU with hardware ray tracing (RT Cores) is fine — do not hardcode a SKU/arch.
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR "${CMAKE_CUDA_ARCHITECTURES}" STREQUAL "")
+  execute_process(
+    COMMAND nvidia-smi --query-gpu=compute_cap --format=csv,noheader
+    OUTPUT_VARIABLE _NRTX_CAPS
+    RESULT_VARIABLE _NRTX_CAPS_RC
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  set(_NRTX_ARCH "")
+  if(_NRTX_CAPS_RC EQUAL 0 AND NOT "${_NRTX_CAPS}" STREQUAL "")
+    string(REGEX REPLACE "\r?\n.*" "" _NRTX_CAP "${_NRTX_CAPS}")
+    string(STRIP "${_NRTX_CAP}" _NRTX_CAP)
+    string(REPLACE "." "" _NRTX_ARCH "${_NRTX_CAP}")
+  endif()
+  if(_NRTX_ARCH STREQUAL "")
+    message(FATAL_ERROR
+      "Could not detect GPU compute capability via nvidia-smi.\n"
+      "Set -DCMAKE_CUDA_ARCHITECTURES=<NN> manually "
+      "(compute_cap X.Y → XY, e.g. 8.9 → 89).\n"
+      "Requires an NVIDIA GPU with hardware ray tracing (RT Cores).")
+  endif()
+  set(CMAKE_CUDA_ARCHITECTURES "${_NRTX_ARCH}")
+  message(STATUS "Detected CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES}")
 endif()
 
 find_package(CUDAToolkit REQUIRED)
@@ -75,10 +98,12 @@ target_link_directories(nrtx_host PUBLIC ${LIBHEIF_LIBRARY_DIRS})
 set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 
-# Compile device programs to OptiX-IR
+# Compile device programs to OptiX-IR (first listed arch if several were set).
 set(NRTX_SHADER_CU ${CMAKE_SOURCE_DIR}/src/device/shaders.cu)
 set(NRTX_SHADER_OPTIXIR ${CMAKE_BINARY_DIR}/shaders.optixir)
-set(NRTX_NVCC_ARCH "compute_${CMAKE_CUDA_ARCHITECTURES}")
+list(GET CMAKE_CUDA_ARCHITECTURES 0 NRTX_SHADER_ARCH)
+set(NRTX_NVCC_ARCH "compute_${NRTX_SHADER_ARCH}")
+message(STATUS "OptiX-IR nvcc -arch=${NRTX_NVCC_ARCH}")
 
 add_custom_command(
   OUTPUT ${NRTX_SHADER_OPTIXIR}
