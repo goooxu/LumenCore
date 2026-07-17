@@ -48,7 +48,7 @@ Open ground scene with chrome and glass props lit primarily by HDRI, soft fill l
 
 ![Sparky](outputs/sparky.png)
 
-Studio duo: **Sparky** (albedo + **tangent-space normal map**) beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`, CC0).
+Studio duo: **Sparky** (albedo + **tangent-space normal map**) beside **Capsule Mascot**, lit by two overhead **spotlights** aimed at each character (`Scene.add_spot_light`). Multi-material OBJs with glass/emissive accents on Sparky and a warm yellow capsule mascot (`capsule_mascot.obj`). Both characters are **AI-generated** assets bundled with this repo.
 
 ### Water Pool
 
@@ -166,4 +166,4 @@ lc.Renderer().render(scene, cam, cfg)
 
 ## License
 
-Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). Sparky is an original asset bundled with this repository. Capsule Mascot is CC0-1.0.
+Sample code for learning and experimentation. OptiX headers remain under NVIDIA’s OptiX SDK license terms. PhysX is under the NVIDIA PhysX SDK license (see upstream `NVIDIA-Omniverse/PhysX`). **Sparky** and **Capsule Mascot** are AI-generated assets bundled with this repository. **Spot** is from Keenan Crane’s [CMU 3D Model Repository](https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/).
