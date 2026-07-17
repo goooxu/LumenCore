@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""PhysX + OptiX dual-stack demo: brick tower collapse after a glass fireball impact."""
+"""PhysX + OptiX dual-stack demo: brick tower collapse after a glass fireball impact.
+
+Rigid bodies are rendered via OptiX IAS: object-space prototype meshes + per-frame
+instance transforms from PhysX poses (no full-scene GAS rebuild).
+"""
 from __future__ import annotations
 
 import math
@@ -56,7 +60,7 @@ def brick_color(ix: int, iy: int, iz: int) -> tuple[float, float, float]:
 
 
 def _scale_mascot_to_brick(mesh: lc.Mesh, model_height: float, model_ymin: float, target_h: float) -> lc.Mesh:
-    """Uniform scale so model height ≈ target_h, then center at origin for apply_pose."""
+    """Uniform scale so model height ≈ target_h, then center at origin for apply_pose / instances."""
     s = target_h / model_height
     cy = model_ymin * s + target_h * 0.5
     return lc.transform_mesh(mesh, (0.0, -cy, 0.0), (s, s, s), (0.0, 0.0, 0.0))
@@ -159,12 +163,18 @@ def ensure_mascot_templates(scene: lc.Scene, target_h: float) -> dict[str, lc.Me
     return _MASCOT_TEMPLATES
 
 
+def _local_box(half: tuple[float, float, float], mat_id: int) -> lc.Mesh:
+    hx, hy, hz = half
+    return lc.make_box((-hx, -hy, -hz), (hx, hy, hz), mat_id)
+
+
 def build_render_scene(
     world: lc.PhysXWorld,
     actors: list[dict],
     brick_half: tuple[float, float, float],
     flame_time: float = 0.0,
 ) -> lc.Scene:
+    """Build scene with object-space prototypes + PhysX pose instances (IAS path)."""
     scene = lc.Scene()
     mat_ids = {
         "floor": scene.add_material(lc.Material(base_color=(0.28, 0.28, 0.30), roughness=0.88)),
@@ -195,21 +205,44 @@ def build_render_scene(
     target_h = 2.0 * max(brick_half[0], brick_half[1], brick_half[2]) * 1.15
     templates = ensure_mascot_templates(scene, target_h)
 
+    # Shared object-space prototypes (GAS rebuilt once per unique mesh per frame).
+    box_proto: dict[tuple, int] = {}
+    sphere_proto: dict[tuple, int] = {}
+    mascot_proto = {
+        "sparky": scene.add_mesh(templates["sparky"]),
+        "capsule": scene.add_mesh(templates["capsule"]),
+    }
+
+    def box_mesh_id(half: tuple[float, float, float], mat_id: int) -> int:
+        key = (half, mat_id)
+        if key not in box_proto:
+            box_proto[key] = scene.add_mesh(_local_box(half, mat_id))
+        return box_proto[key]
+
+    def sphere_mesh_id(radius: float, mat_id: int) -> int:
+        key = (radius, mat_id)
+        if key not in sphere_proto:
+            sphere_proto[key] = scene.add_mesh(
+                lc.make_uv_sphere((0.0, 0.0, 0.0), radius, mat_id, 48, 24)
+            )
+        return sphere_proto[key]
+
     for entry in actors:
         pose = world.get_pose(entry["id"])
         kind = entry["kind"]
         if kind == "static_box":
-            scene.add_mesh(lc.apply_pose_to_box_mesh(entry["half"], pose, mat_ids[entry["mat"]]))
+            mid = box_mesh_id(tuple(entry["half"]), mat_ids[entry["mat"]])
+            scene.add_instance(mid, pose)
         elif kind == "brick":
-            scene.add_mesh(lc.apply_pose_to_box_mesh(entry["half"], pose, brick_mat(entry["color"])))
+            mid = box_mesh_id(tuple(entry["half"]), brick_mat(entry["color"]))
+            scene.add_instance(mid, pose)
         elif kind == "mascot":
-            scene.add_mesh(lc.apply_pose_to_mesh(templates[entry["which"]], pose))
+            scene.add_instance(mascot_proto[entry["which"]], pose)
         elif kind == "sphere":
             radius = float(entry["radius"])
-            scene.add_mesh(
-                lc.apply_pose_to_sphere_mesh(radius, pose, mat_ids["glass"], 48, 24)
-            )
-            # Flame AABB inscribed in the glass sphere (slightly taller for tongue look).
+            mid = sphere_mesh_id(radius, mat_ids["glass"])
+            scene.add_instance(mid, pose)
+            # Flame AABB (world-space mesh → renderer adds identity instance automatically).
             he = radius * 0.52
             cx, cy, cz = pose.position
             scene.add_flame_volume(
@@ -223,7 +256,7 @@ def build_render_scene(
                 add_proxy_light=True,
             )
 
-    # Dim fill — the fireball is the key light.
+    # Dim fill — world-space quad (orphan mesh → identity IAS instance).
     scene.add_mesh(lc.make_quad((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), mat_ids["light"]))
     scene.add_quad_light((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), (2.2, 2.0, 1.8))
     scene.add_quad_light((4.0, 5.0, -3.0), (0.0, 0, 2.0), (0, -2.0, 0), (0.8, 0.85, 1.0))
@@ -292,7 +325,8 @@ def main() -> int:
             }
         )
 
-    nx, ny, nz = 8, 12, 8
+    # Slightly denser tower to exercise IAS instance counts.
+    nx, ny, nz = 10, 14, 10
     brick_half = (0.18, 0.12, 0.18)
     gap = 0.01
     ox = -(nx - 1) * (brick_half[0] * 2 + gap) * 0.5
@@ -305,8 +339,8 @@ def main() -> int:
                 y = brick_half[1] + iy * (brick_half[1] * 2 + gap)
                 z = oz + iz * (brick_half[2] * 2 + gap)
                 aid = world.add_dynamic_box(brick_half, 1.2, lc.Pose(position=(x, y, z)))
-                # Deterministic sparse replacements (~11 in an 8×12×8 tower).
-                if (ix + iy * 3 + iz * 5) % 41 == 0 and 3 <= iy <= 9:
+                # Deterministic sparse replacements.
+                if (ix + iy * 3 + iz * 5) % 41 == 0 and 3 <= iy <= 11:
                     which = "sparky" if (mascot_count % 2 == 0) else "capsule"
                     actors.append({"id": aid, "kind": "mascot", "which": which})
                     mascot_count += 1
@@ -320,6 +354,7 @@ def main() -> int:
                         }
                     )
     print(f"[physx_collapse] mascots in tower: {mascot_count}", flush=True)
+    print(f"[physx_collapse] dynamic bodies: {nx * ny * nz} (IAS instances)", flush=True)
 
     # Single heavy glass fireball rolling down the ramp.
     ball_r = 0.75
@@ -373,37 +408,27 @@ def main() -> int:
         world.step(1.0 / 60.0, 1)
         step_i += 1
 
-    # Build contact sheet in a child process so a PIL crash cannot kill the demo.
+    # Optional contact sheet (Pillow may be missing in the CUDA build image).
     sheet_path = frames_dir / "contact_sheet.png"
     try:
-        import subprocess
+        from PIL import Image  # type: ignore
 
         picks = frame_paths[:: max(1, len(frame_paths) // 6)][:6]
         if picks:
-            script = (
-                "from PIL import Image\n"
-                "from pathlib import Path\n"
-                f"paths = {[str(p) for p in picks]!r}\n"
-                f"out = {str(sheet_path)!r}\n"
-                "imgs = [Image.open(p) for p in paths]\n"
-                "w, h = imgs[0].size\n"
-                "sheet = Image.new('RGB', (w * len(imgs), h))\n"
-                "for i, im in enumerate(imgs):\n"
-                "    sheet.paste(im, (i * w, 0))\n"
-                "sheet.save(out)\n"
-            )
-            rc = subprocess.run(
-                [sys.executable, "-c", script],
-                check=False,
-            ).returncode
-            if rc == 0 and sheet_path.is_file():
-                print(f"[physx_collapse] contact sheet → {sheet_path}", flush=True)
-            else:
-                print(f"[physx_collapse] contact sheet skipped (exit {rc})", flush=True)
+            imgs = [Image.open(p) for p in picks]
+            w, h = imgs[0].size
+            sheet = Image.new("RGB", (w * len(imgs), h))
+            for i, im in enumerate(imgs):
+                sheet.paste(im, (i * w, 0))
+            sheet.save(sheet_path)
+            print(f"[physx_collapse] contact sheet → {sheet_path}", flush=True)
     except Exception as exc:  # noqa: BLE001
         print(f"[physx_collapse] contact sheet skipped ({exc})", flush=True)
 
     print(f"[physx_collapse] done. frames={len(frame_paths)} backend={world.backend()}", flush=True)
+    # Drop renderer before PhysX so OptiX/CUDA tear down ahead of the GPU scene.
+    del renderer
+    del world
     return 0
 
 

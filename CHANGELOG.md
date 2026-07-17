@@ -5,6 +5,20 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-17
+
+### Added
+
+- **OptiX IAS instancing** for PhysX: `Scene.add_instance(mesh_index, pose)` builds per-prototype GAS + IAS from rigid poses (no full-scene mesh merge each frame)
+- `Scene.add_mesh` now returns a mesh index for instancing
+
+### Changed
+
+- `physx_collapse` uses object-space prototypes + pose instances; tower density increased to 10×14×10
+- Renderer pipeline allows `SINGLE_GAS` and `SINGLE_LEVEL_INSTANCING` (traversable depth 2)
+- Uninstanced meshes in an instanced scene automatically get an identity instance (flame proxies, light quads)
+- Docs/report 01/07/08/09/10 + README + appendix updated for IAS dual-stack path; `physx-render-loop` figure shows instance/IAS loop
+
 ## [0.11.0] - 2026-07-17
 
 ### Added

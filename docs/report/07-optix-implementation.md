@@ -8,7 +8,7 @@
 
 ![OptiX 结构示意](figures/optix-architecture.png)
 
-*图：Context 管理 Module 与 Pipeline；GAS 存三角形加速结构；SBT 把射线类型绑到具体程序。*
+图注：Context 管理 Module 与 Pipeline；GAS 存三角形加速结构；IAS 用实例变换引用多个 GAS；SBT 把射线类型绑到具体程序。
 
 ## 核心对象（对照本仓库）
 
@@ -18,11 +18,39 @@
 | Module | `optixModuleCreate` | 装入编译好的设备程序 |
 | Program groups | raygen / miss / hitgroup × 2 | 程序入口组合 |
 | Pipeline | `optixPipelineCreate` | 可启动的整条链路 |
-| GAS | 合并场景三角形后 `optixAccelBuild` | 几何加速结构 |
-| SBT | Raygen / Miss / Hitgroup records | 启动时查「这条射线跑哪个程序」 |
+| GAS | 每个原型网格 `optixAccelBuild` | 几何加速结构（物体空间） |
+| IAS | `Scene.instances` 非空时构建 | 实例变换 → 子 GAS |
+| SBT | 每原型 mesh 一组 hitgroup × 2 | 启动时查「这条射线跑哪个程序」 |
 | LaunchParams | `LaunchParams.h` + `__constant__ params` | 每帧上传的全局参数 |
 
-Pipeline 选项里使用 `ALLOW_SINGLE_GAS`：整个场景一个 GAS 即可。
+Pipeline 同时允许：
+
+- `ALLOW_SINGLE_GAS`：静态场景把网格合并成一个世界空间 GAS（Cornell 等）；
+- `ALLOW_SINGLE_LEVEL_INSTANCING`：PhysX 路径为 **IAS → GAS**（`physx_collapse`）。
+
+`optixPipelineSetStackSize` 的 traversable 深度为 **2**，以覆盖 IAS 一层。
+
+## GAS 与 IAS
+
+```mermaid
+flowchart TB
+  subgraph staticPath [StaticScenes]
+    merge[merge_meshes] --> oneGas[single_world_GAS]
+  end
+  subgraph physxPath [PhysXScenes]
+    proto[prototype_meshes_object_space] --> manyGas[one_GAS_per_mesh]
+    poses[PhysX_poses] --> inst[OptixInstance_transforms]
+    manyGas --> ias[IAS_root]
+    inst --> ias
+  end
+  oneGas --> trace[optixTrace]
+  ias --> trace
+```
+
+- **静态 / 无 instance**：行为与旧版相同，合并顶点后建一个 GAS，`LaunchParams.handle` 指向它。
+- **有 `Scene.add_instance`**：每个 `meshes[i]` 是物体空间原型并建独立 GAS；实例的 `sbtOffset = mesh_index * RAY_TYPE_COUNT`；根句柄为 IAS。未挂 instance 的网格（如火焰代理盒、面光四边形）自动补 **单位变换** instance。
+
+着色里顶点在物体空间；`optixTransformPointFromObjectToWorldSpace` / `TransformNormal...` 已用于法线与交点（`shaders.cu`），因此 IAS 与单 GAS 共用同一套 closesthit。
 
 ## 两种射线类型
 
@@ -65,7 +93,7 @@ OptiX 用寄存器 payload 传指针。本项目把 `RadiancePRD`（原点、方
 ## 小结
 
 - OptiX = 求交加速 + 可编程命中着色。
-- 本项目：单 GAS、双射线类型、SBT 绑定、PRD 载荷。
-- 精读：`renderer.cpp` 的 pipeline/SBT/GAS，`shaders.cu` 的五个入口。
+- 本项目：单 GAS **或** IAS→GAS、双射线类型、SBT 绑定、PRD 载荷。
+- 精读：`renderer.cpp` 的 pipeline/SBT/GAS/IAS，`shaders.cu` 的五个入口。
 
 下一章：[08 Host 管线与后处理](08-host-pipeline.md)。

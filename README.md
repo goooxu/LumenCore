@@ -24,7 +24,7 @@ Dark stone hearth lit almost entirely by a **procedural flame volume** (noise de
 
 ![PhysX Collapse](outputs/physx_collapse.png)
 
-Studio brick tower knocked over by a heavy **glass fireball** (procedural flame volume inside) rolling down a ramp in a darker studio. Brick-sized **Sparky** and **Capsule Mascot** are mixed into the tower. **PhysX** advances GPU rigid bodies; each sampled frame rebuilds triangle meshes from actor poses and is path-traced with **OptiX**. Frame sequence: `outputs/physx_collapse/`; homepage hero: `outputs/physx_collapse.png`.
+Studio brick tower knocked over by a heavy **glass fireball** (procedural flame volume inside) rolling down a ramp in a darker studio. Brick-sized **Sparky** and **Capsule Mascot** are mixed into the tower. **PhysX** advances GPU rigid bodies; each sampled frame updates **OptiX IAS** instance transforms from actor poses (prototype GAS reused) and path-traces with **OptiX**. Frame sequence: `outputs/physx_collapse/`; homepage hero: `outputs/physx_collapse.png`.
 
 ### Cornell Box
 
@@ -60,13 +60,13 @@ Open deep water with a **calm procedural surface** (`make_water_surface` + analy
 
 ## Features
 
-- **PhysX 5 + OptiX 9** — GPU PhysX rigid bodies (required) + OptiX path tracing (`PhysXWorld` → poses → meshes → path tracer)
+- **PhysX 5 + OptiX 9** — GPU PhysX rigid bodies (required) + OptiX path tracing (`PhysXWorld` → poses → **IAS instances** → path tracer)
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
 - Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights + HDRI)
 - Russian Roulette; **GGX** opaque materials + **GGX rough glass** (microfacet transmission)
 - **HDRI env maps** (`Scene.load_env_map`) with CDF importance sampling and balance MIS
-- Triangle-mesh GAS on OptiX RT Cores
+- Triangle-mesh **GAS** + optional **IAS** instancing on OptiX RT Cores
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
 - Albedo textures (`Scene.add_texture`, `Material.albedo_tex`)
 - Spot lights (`Scene.add_spot_light`)

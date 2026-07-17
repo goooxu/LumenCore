@@ -156,15 +156,7 @@ struct Renderer::Impl {
     if (denoiser) {
       optixDenoiserDestroy(denoiser);
     }
-    if (sbt.raygenRecord) {
-      cudaFree(reinterpret_cast<void *>(sbt.raygenRecord));
-    }
-    if (sbt.missRecordBase) {
-      cudaFree(reinterpret_cast<void *>(sbt.missRecordBase));
-    }
-    if (sbt.hitgroupRecordBase) {
-      cudaFree(reinterpret_cast<void *>(sbt.hitgroupRecordBase));
-    }
+    free_sbt();
     if (pipeline) {
       optixPipelineDestroy(pipeline);
     }
@@ -208,7 +200,10 @@ struct Renderer::Impl {
 
     OptixPipelineCompileOptions pipeline_options = {};
     pipeline_options.usesMotionBlur = false;
-    pipeline_options.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+    // Allow legacy single-GAS scenes and PhysX IAS→GAS graphs.
+    pipeline_options.traversableGraphFlags =
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS |
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
     pipeline_options.numPayloadValues = 2;
     pipeline_options.numAttributeValues = 2;
     pipeline_options.exceptionFlags = OPTIX_EXCEPTION_FLAG_NONE;
@@ -276,7 +271,8 @@ struct Renderer::Impl {
     }
     unsigned direct = 0, continuable = 0, state = 0;
     OPTIX_CHECK(optixUtilComputeStackSizes(&stack_sizes, 2, 0, 0, &direct, &continuable, &state));
-    OPTIX_CHECK(optixPipelineSetStackSize(pipeline, direct, continuable, state, 1));
+    // Depth 2: IAS → GAS (PhysX instances). Single-GAS scenes still work.
+    OPTIX_CHECK(optixPipelineSetStackSize(pipeline, direct, continuable, state, 2));
   }
 
   OptixTraversableHandle build_gas(const std::vector<float3> &vertices,
@@ -343,7 +339,79 @@ struct Renderer::Impl {
     return handle;
   }
 
-  void build_sbt(const HitGroupData &hit_data) {
+  static void pose_to_transform(const Pose &pose, float out[12]) {
+    const float3 t = pose.position;
+    const float4 q = pose.quat;
+    const float x = q.x, y = q.y, z = q.z, w = q.w;
+    const float xx = x * x, yy = y * y, zz = z * z;
+    const float xy = x * y, xz = x * z, yz = y * z;
+    const float wx = w * x, wy = w * y, wz = w * z;
+    // Row-major 3x4: R | t
+    out[0] = 1.0f - 2.0f * (yy + zz);
+    out[1] = 2.0f * (xy - wz);
+    out[2] = 2.0f * (xz + wy);
+    out[3] = t.x;
+    out[4] = 2.0f * (xy + wz);
+    out[5] = 1.0f - 2.0f * (xx + zz);
+    out[6] = 2.0f * (yz - wx);
+    out[7] = t.y;
+    out[8] = 2.0f * (xz - wy);
+    out[9] = 2.0f * (yz + wx);
+    out[10] = 1.0f - 2.0f * (xx + yy);
+    out[11] = t.z;
+  }
+
+  OptixTraversableHandle build_ias(const std::vector<OptixInstance> &instances) {
+    CudaBuffer<OptixInstance> d_instances;
+    d_instances.upload(instances);
+
+    OptixBuildInput build_input = {};
+    build_input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+    build_input.instanceArray.instances = reinterpret_cast<CUdeviceptr>(d_instances.ptr);
+    build_input.instanceArray.numInstances = static_cast<unsigned>(instances.size());
+
+    OptixAccelBuildOptions accel_options = {};
+    accel_options.buildFlags = OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
+    accel_options.operation = OPTIX_BUILD_OPERATION_BUILD;
+
+    OptixAccelBufferSizes ias_sizes;
+    OPTIX_CHECK(optixAccelComputeMemoryUsage(context, &accel_options, &build_input, 1, &ias_sizes));
+
+    CudaBuffer<char> temp;
+    temp.alloc(ias_sizes.tempSizeInBytes);
+    CudaBuffer<char> *ias_buffer = new CudaBuffer<char>();
+    ias_buffer->alloc(ias_sizes.outputSizeInBytes);
+
+    OptixTraversableHandle handle = 0;
+    OPTIX_CHECK(optixAccelBuild(context, stream, &accel_options, &build_input, 1,
+                                reinterpret_cast<CUdeviceptr>(temp.ptr), ias_sizes.tempSizeInBytes,
+                                reinterpret_cast<CUdeviceptr>(ias_buffer->ptr),
+                                ias_sizes.outputSizeInBytes, &handle, nullptr, 0));
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    static std::vector<CudaBuffer<char> *> ias_keepalives;
+    ias_keepalives.push_back(ias_buffer);
+    return handle;
+  }
+
+  void free_sbt() {
+    if (sbt.raygenRecord) {
+      cudaFree(reinterpret_cast<void *>(sbt.raygenRecord));
+      sbt.raygenRecord = 0;
+    }
+    if (sbt.missRecordBase) {
+      cudaFree(reinterpret_cast<void *>(sbt.missRecordBase));
+      sbt.missRecordBase = 0;
+    }
+    if (sbt.hitgroupRecordBase) {
+      cudaFree(reinterpret_cast<void *>(sbt.hitgroupRecordBase));
+      sbt.hitgroupRecordBase = 0;
+    }
+  }
+
+  void build_sbt(const std::vector<HitGroupData> &hit_datas) {
+    free_sbt();
+
     struct alignas(OPTIX_SBT_RECORD_ALIGNMENT) RaygenRecord {
       char header[OPTIX_SBT_RECORD_HEADER_SIZE];
     };
@@ -369,14 +437,20 @@ struct Renderer::Impl {
     CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_ms), sizeof(ms)));
     CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(d_ms), ms, sizeof(ms), cudaMemcpyHostToDevice));
 
-    HitgroupRecord hg[RAY_TYPE_COUNT] = {};
-    OPTIX_CHECK(optixSbtRecordPackHeader(hit_radiance_pg, &hg[RAY_TYPE_RADIANCE]));
-    OPTIX_CHECK(optixSbtRecordPackHeader(hit_shadow_pg, &hg[RAY_TYPE_SHADOW]));
-    hg[RAY_TYPE_RADIANCE].data = hit_data;
-    hg[RAY_TYPE_SHADOW].data = hit_data;
+    const size_t n_meshes = hit_datas.size();
+    std::vector<HitgroupRecord> hg(n_meshes * RAY_TYPE_COUNT);
+    for (size_t i = 0; i < n_meshes; ++i) {
+      HitgroupRecord &rad = hg[i * RAY_TYPE_COUNT + RAY_TYPE_RADIANCE];
+      HitgroupRecord &sh = hg[i * RAY_TYPE_COUNT + RAY_TYPE_SHADOW];
+      OPTIX_CHECK(optixSbtRecordPackHeader(hit_radiance_pg, &rad));
+      OPTIX_CHECK(optixSbtRecordPackHeader(hit_shadow_pg, &sh));
+      rad.data = hit_datas[i];
+      sh.data = hit_datas[i];
+    }
     CUdeviceptr d_hg = 0;
-    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_hg), sizeof(hg)));
-    CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(d_hg), hg, sizeof(hg), cudaMemcpyHostToDevice));
+    const size_t hg_bytes = hg.size() * sizeof(HitgroupRecord);
+    CUDA_CHECK(cudaMalloc(reinterpret_cast<void **>(&d_hg), hg_bytes));
+    CUDA_CHECK(cudaMemcpy(reinterpret_cast<void *>(d_hg), hg.data(), hg_bytes, cudaMemcpyHostToDevice));
 
     sbt.raygenRecord = d_rg;
     sbt.missRecordBase = d_ms;
@@ -384,7 +458,7 @@ struct Renderer::Impl {
     sbt.missRecordCount = RAY_TYPE_COUNT;
     sbt.hitgroupRecordBase = d_hg;
     sbt.hitgroupRecordStrideInBytes = static_cast<unsigned>(sizeof(HitgroupRecord));
-    sbt.hitgroupRecordCount = RAY_TYPE_COUNT;
+    sbt.hitgroupRecordCount = static_cast<unsigned>(hg.size());
   }
 
   void setup_denoiser(int width, int height) {
@@ -496,54 +570,132 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
     impl_->create_pipeline(ptx_path);
   }
 
-  // Merge meshes into one GAS
-  std::vector<float3> vertices;
-  std::vector<float2> texcoords;
-  std::vector<float3> normals;
-  std::vector<int3> indices;
-  std::vector<int> material_ids;
-  bool any_normals = false;
-  for (const Mesh &mesh : scene.meshes) {
-    const int base = static_cast<int>(vertices.size());
-    vertices.insert(vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+  // Geometry: either merge into one GAS (legacy) or per-mesh GAS + IAS (PhysX instances).
+  struct MeshDevice {
+    CudaBuffer<float3> vertices;
+    CudaBuffer<float2> texcoords;
+    CudaBuffer<float3> normals;
+    CudaBuffer<int3> indices;
+    CudaBuffer<int> mat_ids;
+    OptixTraversableHandle gas = 0;
+    bool any_normals = false;
+  };
+
+  auto upload_mesh = [&](const Mesh &mesh, MeshDevice &dev) {
+    std::vector<float2> texcoords;
+    std::vector<float3> normals;
     if (mesh.texcoords.size() == mesh.vertices.size()) {
-      texcoords.insert(texcoords.end(), mesh.texcoords.begin(), mesh.texcoords.end());
+      texcoords = mesh.texcoords;
     } else {
-      texcoords.insert(texcoords.end(), mesh.vertices.size(), make_float2(0.0f, 0.0f));
+      texcoords.assign(mesh.vertices.size(), make_float2(0.0f, 0.0f));
     }
     if (mesh.normals.size() == mesh.vertices.size()) {
-      any_normals = true;
-      normals.insert(normals.end(), mesh.normals.begin(), mesh.normals.end());
+      normals = mesh.normals;
+      dev.any_normals = true;
     } else {
-      normals.insert(normals.end(), mesh.vertices.size(), make_float3(0.0f, 0.0f, 0.0f));
+      normals.assign(mesh.vertices.size(), make_float3(0.0f, 0.0f, 0.0f));
     }
-    for (size_t i = 0; i < mesh.indices.size(); ++i) {
-      const int3 idx = mesh.indices[i];
-      indices.push_back(make_int3(idx.x + base, idx.y + base, idx.z + base));
-      material_ids.push_back(mesh.material_ids[i]);
+    dev.gas = impl_->build_gas(mesh.vertices, mesh.indices, dev.vertices, dev.indices);
+    dev.texcoords.upload(texcoords);
+    dev.mat_ids.upload(mesh.material_ids);
+    if (dev.any_normals) {
+      dev.normals.upload(normals);
     }
+  };
+
+  auto make_hit = [&](MeshDevice &dev) {
+    HitGroupData hit;
+    hit.vertices = dev.vertices.ptr;
+    hit.texcoords = dev.texcoords.ptr;
+    hit.normals = dev.any_normals ? dev.normals.ptr : nullptr;
+    hit.indices = dev.indices.ptr;
+    hit.material_ids = dev.mat_ids.ptr;
+    return hit;
+  };
+
+  OptixTraversableHandle root_traversable = 0;
+  std::vector<MeshDevice> mesh_devs;
+  std::vector<HitGroupData> hit_datas;
+
+  if (!scene.instances.empty()) {
+    // --- IAS path: one GAS per prototype mesh, instances carry PhysX poses ---
+    std::vector<SceneInstance> instances = scene.instances;
+    std::vector<char> referenced(scene.meshes.size(), 0);
+    for (const SceneInstance &inst : instances) {
+      if (inst.mesh_index < 0 ||
+          inst.mesh_index >= static_cast<int>(scene.meshes.size())) {
+        throw std::runtime_error("SceneInstance.mesh_index out of range");
+      }
+      referenced[static_cast<size_t>(inst.mesh_index)] = 1;
+    }
+    // World-space leftovers (flame proxy, light quads) get an identity instance.
+    for (size_t i = 0; i < scene.meshes.size(); ++i) {
+      if (!referenced[i]) {
+        SceneInstance orphan;
+        orphan.mesh_index = static_cast<int>(i);
+        orphan.pose = Pose{};
+        instances.push_back(orphan);
+      }
+    }
+
+    mesh_devs.resize(scene.meshes.size());
+    hit_datas.resize(scene.meshes.size());
+    for (size_t i = 0; i < scene.meshes.size(); ++i) {
+      upload_mesh(scene.meshes[i], mesh_devs[i]);
+      hit_datas[i] = make_hit(mesh_devs[i]);
+    }
+    impl_->build_sbt(hit_datas);
+
+    std::vector<OptixInstance> optix_instances(instances.size());
+    for (size_t i = 0; i < instances.size(); ++i) {
+      const SceneInstance &inst = instances[i];
+      OptixInstance &oi = optix_instances[i];
+      oi = {};
+      impl_->pose_to_transform(inst.pose, oi.transform);
+      oi.instanceId = static_cast<unsigned>(i);
+      oi.sbtOffset = static_cast<unsigned>(inst.mesh_index) * RAY_TYPE_COUNT;
+      oi.visibilityMask = 255;
+      oi.flags = OPTIX_INSTANCE_FLAG_NONE;
+      oi.traversableHandle = mesh_devs[static_cast<size_t>(inst.mesh_index)].gas;
+    }
+    root_traversable = impl_->build_ias(optix_instances);
+    std::cout << "IAS: " << scene.meshes.size() << " prototype GAS, " << instances.size()
+              << " instances\n";
+  } else {
+    // --- Legacy: merge all meshes into one world-space GAS ---
+    Mesh merged;
+    bool any_normals = false;
+    for (const Mesh &mesh : scene.meshes) {
+      const int base = static_cast<int>(merged.vertices.size());
+      merged.vertices.insert(merged.vertices.end(), mesh.vertices.begin(), mesh.vertices.end());
+      if (mesh.texcoords.size() == mesh.vertices.size()) {
+        merged.texcoords.insert(merged.texcoords.end(), mesh.texcoords.begin(), mesh.texcoords.end());
+      } else {
+        merged.texcoords.insert(merged.texcoords.end(), mesh.vertices.size(),
+                                make_float2(0.0f, 0.0f));
+      }
+      if (mesh.normals.size() == mesh.vertices.size()) {
+        any_normals = true;
+        merged.normals.insert(merged.normals.end(), mesh.normals.begin(), mesh.normals.end());
+      } else {
+        merged.normals.insert(merged.normals.end(), mesh.vertices.size(),
+                              make_float3(0.0f, 0.0f, 0.0f));
+      }
+      for (size_t i = 0; i < mesh.indices.size(); ++i) {
+        const int3 idx = mesh.indices[i];
+        merged.indices.push_back(make_int3(idx.x + base, idx.y + base, idx.z + base));
+        merged.material_ids.push_back(mesh.material_ids[i]);
+      }
+    }
+    if (!any_normals) {
+      merged.normals.clear();
+    }
+    mesh_devs.resize(1);
+    upload_mesh(merged, mesh_devs[0]);
+    hit_datas.push_back(make_hit(mesh_devs[0]));
+    impl_->build_sbt(hit_datas);
+    root_traversable = mesh_devs[0].gas;
   }
-
-  CudaBuffer<float3> d_vertices;
-  CudaBuffer<float2> d_texcoords;
-  CudaBuffer<float3> d_normals;
-  CudaBuffer<int3> d_indices;
-  CudaBuffer<int> d_mat_ids;
-  d_texcoords.upload(texcoords);
-  d_mat_ids.upload(material_ids);
-  if (any_normals) {
-    d_normals.upload(normals);
-  }
-
-  OptixTraversableHandle gas = impl_->build_gas(vertices, indices, d_vertices, d_indices);
-
-  HitGroupData hit_data;
-  hit_data.vertices = d_vertices.ptr;
-  hit_data.texcoords = d_texcoords.ptr;
-  hit_data.normals = any_normals ? d_normals.ptr : nullptr;
-  hit_data.indices = d_indices.ptr;
-  hit_data.material_ids = d_mat_ids.ptr;
-  impl_->build_sbt(hit_data);
 
   std::vector<MaterialGPU> materials_gpu(scene.materials.size());
   for (size_t i = 0; i < scene.materials.size(); ++i) {
@@ -619,7 +771,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   d_params.alloc(1);
 
   LaunchParams lp = {};
-  lp.handle = gas;
+  lp.handle = root_traversable;
   lp.accum_buffer = d_accum.ptr;
   lp.albedo_buffer = d_albedo.ptr;
   lp.normal_buffer = d_normal.ptr;

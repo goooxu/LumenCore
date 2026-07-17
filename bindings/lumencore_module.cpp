@@ -165,13 +165,49 @@ PYBIND11_MODULE(lumencore, m) {
 
   py::class_<Mesh>(m, "Mesh").def(py::init<>());
 
+  py::class_<Pose>(m, "Pose")
+      .def(py::init<>())
+      .def(py::init([](const py::object &position, const py::object &quat) {
+             Pose p;
+             p.position = to_float3(position);
+             const py::sequence q = py::reinterpret_borrow<py::sequence>(quat);
+             if (q.size() != 4) {
+               throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
+             }
+             p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
+                                  py::cast<float>(q[3]));
+             return p;
+           }),
+           py::arg("position") = py::make_tuple(0.0f, 0.0f, 0.0f),
+           py::arg("quat") = py::make_tuple(0.0f, 0.0f, 0.0f, 1.0f))
+      .def_property(
+          "position", [](const Pose &p) { return from_float3(p.position); },
+          [](Pose &p, const py::object &v) { p.position = to_float3(v); })
+      .def_property(
+          "quat",
+          [](const Pose &p) { return py::make_tuple(p.quat.x, p.quat.y, p.quat.z, p.quat.w); },
+          [](Pose &p, const py::object &v) {
+            const py::sequence q = py::reinterpret_borrow<py::sequence>(v);
+            if (q.size() != 4) {
+              throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
+            }
+            p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
+                                 py::cast<float>(q[3]));
+          });
+
   py::class_<Scene>(m, "Scene")
       .def(py::init<>())
       .def("add_material", &Scene::add_material, py::arg("material"))
       .def("add_texture", &Scene::add_texture, py::arg("path"))
       .def("load_env_map", &Scene::load_env_map, py::arg("path"))
       .def("clear_env_map", &Scene::clear_env_map)
-      .def("add_mesh", [](Scene &s, Mesh mesh) { s.add_mesh(std::move(mesh)); }, py::arg("mesh"))
+      .def("add_mesh",
+           [](Scene &s, Mesh mesh) { return s.add_mesh(std::move(mesh)); }, py::arg("mesh"),
+           "Add a mesh prototype; returns mesh index for add_instance")
+      .def("add_instance",
+           [](Scene &s, int mesh_index, const Pose &pose) { s.add_instance(mesh_index, pose); },
+           py::arg("mesh_index"), py::arg("pose") = Pose{},
+           "Instance a prototype mesh with a rigid pose (enables OptiX IAS path)")
       .def(
           "add_quad_light",
           [](Scene &s, const py::object &corner, const py::object &u, const py::object &v,
@@ -268,36 +304,6 @@ PYBIND11_MODULE(lumencore, m) {
       },
       py::arg("input"), py::arg("translate"), py::arg("scale"),
       py::arg("rotate_xyz_radians") = py::make_tuple(0.0f, 0.0f, 0.0f));
-
-  py::class_<Pose>(m, "Pose")
-      .def(py::init<>())
-      .def(py::init([](const py::object &position, const py::object &quat) {
-             Pose p;
-             p.position = to_float3(position);
-             const py::sequence q = py::reinterpret_borrow<py::sequence>(quat);
-             if (q.size() != 4) {
-               throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
-             }
-             p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
-                                  py::cast<float>(q[3]));
-             return p;
-           }),
-           py::arg("position") = py::make_tuple(0.0f, 0.0f, 0.0f),
-           py::arg("quat") = py::make_tuple(0.0f, 0.0f, 0.0f, 1.0f))
-      .def_property(
-          "position", [](const Pose &p) { return from_float3(p.position); },
-          [](Pose &p, const py::object &v) { p.position = to_float3(v); })
-      .def_property(
-          "quat",
-          [](const Pose &p) { return py::make_tuple(p.quat.x, p.quat.y, p.quat.z, p.quat.w); },
-          [](Pose &p, const py::object &v) {
-            const py::sequence q = py::reinterpret_borrow<py::sequence>(v);
-            if (q.size() != 4) {
-              throw std::invalid_argument("Pose.quat expects 4 components (x,y,z,w)");
-            }
-            p.quat = make_float4(py::cast<float>(q[0]), py::cast<float>(q[1]), py::cast<float>(q[2]),
-                                 py::cast<float>(q[3]));
-          });
 
   py::class_<PhysXWorld>(m, "PhysXWorld")
       .def(py::init<>())

@@ -6,8 +6,8 @@
 
 ```mermaid
 flowchart LR
-  upload[上传网格材质灯HDRI] --> gas[构建或更新GAS]
-  gas --> loop[循环optixLaunch]
+  upload[上传网格材质灯HDRI] --> accel[构建GAS或IAS]
+  accel --> loop[循环optixLaunch]
   loop --> accum[累加缓冲]
   accum --> denoise[可选Denoiser]
   denoise --> tonemap[ACES加gamma]
@@ -16,10 +16,12 @@ flowchart LR
 
 *图：Host 侧从上传到出图。*
 
-### 1. 合并网格 → GAS
+### 1. 加速结构：GAS 或 IAS
 
-场景里多个 `Mesh` 拼成大顶点/索引数组，上传 GPU，构建 **GAS**（Geometry Acceleration Structure）。  
-Hitgroup SBT 记录指向 `HitGroupData`（顶点、UV、法线、材质 id）。
+- **无 instance**（多数静态 demo）：多个 `Mesh` 拼成大数组，建一个世界空间 **GAS**。
+- **有 `Scene.instances`**（PhysX）：每个原型网格单独建 GAS，再按位姿建 **IAS**；SBT 按 `mesh_index` 分 hitgroup。未实例化的网格自动挂单位变换。
+
+`LaunchParams.handle` 指向最终根 traversable（GAS 或 IAS）。
 
 ### 2. 填 `LaunchParams`
 

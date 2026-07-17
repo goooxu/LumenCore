@@ -49,8 +49,16 @@ struct Camera {
   float focus_dist = 0.0f;
 };
 
+struct Pose; // from physx_world.h — already included
+
+struct SceneInstance {
+  int mesh_index = 0; // index into Scene::meshes (object-space prototype)
+  Pose pose;          // instance transform (PhysX or identity)
+};
+
 struct Scene {
   std::vector<Mesh> meshes;
+  std::vector<SceneInstance> instances; // empty → merge meshes into one GAS (legacy)
   std::vector<Material> materials;
   std::vector<Texture2D> textures;
   std::vector<QuadLight> lights;
@@ -71,7 +79,17 @@ struct Scene {
 
   void clear_env_map() { env_map.clear(); }
 
-  void add_mesh(Mesh mesh) { meshes.push_back(std::move(mesh)); }
+  int add_mesh(Mesh mesh) {
+    meshes.push_back(std::move(mesh));
+    return static_cast<int>(meshes.size() - 1);
+  }
+
+  void add_instance(int mesh_index, const Pose &pose = Pose{}) {
+    SceneInstance inst;
+    inst.mesh_index = mesh_index;
+    inst.pose = pose;
+    instances.push_back(inst);
+  }
 
   void add_quad_light(const float3 &corner, const float3 &u, const float3 &v,
                       const float3 &emission) {

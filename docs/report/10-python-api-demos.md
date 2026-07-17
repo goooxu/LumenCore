@@ -20,7 +20,8 @@ lc.Renderer().render(scene, cam, cfg)
 | 需求 | 调用 |
 |------|------|
 | 材质 | `scene.add_material(Material(...))` |
-| 网格 | `make_box` / `make_uv_sphere` / `make_quad` / `load_obj` |
+| 网格 | `add_mesh` → mesh index；`make_box` / `make_uv_sphere` / `make_quad` / `load_obj` |
+| 实例 / PhysX | `add_instance(mesh_index, pose)`（IAS）；或 `apply_pose_to_*`（旧世界空间网格） |
 | 变换 | `transform_mesh` / `apply_pose_to_*` |
 | 面光 | `add_quad_light` |
 | 聚光 | `add_spot_light` |
@@ -55,7 +56,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 ![PhysX Collapse](../../outputs/physx_collapse.png)
 
-GPU 刚体 + 玻璃火球。脚本：`physx_collapse.py`。
+GPU 刚体 + IAS 实例变换 + 玻璃火球。脚本：`physx_collapse.py`。
 
 ### Water Pool — 介质
 

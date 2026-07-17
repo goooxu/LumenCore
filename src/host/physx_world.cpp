@@ -72,11 +72,8 @@ struct PhysXWorld::Impl {
   bool initialized = false;
 
   void shutdown() {
-    for (PxRigidActor *actor : actors) {
-      if (actor) {
-        actor->release();
-      }
-    }
+    // Releasing the scene frees all actors still in it. Do not also actor->release()
+    // afterward — that double-free often SIGSEGVs on PhysX GPU teardown.
     actors.clear();
     if (scene) {
       scene->release();

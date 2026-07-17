@@ -37,7 +37,7 @@
 | Cornell Box | `outputs/cornell.png` | 面光 NEE、玻璃折射、间接照明 |
 | GGX Studio | `outputs/ggx_studio.png` | GGX 粗糙度 / 金属度、HDRI |
 | Fireplace | `outputs/fireplace.png` | 火焰体积、暗场景、吉祥物材质 |
-| PhysX Collapse | `outputs/physx_collapse.png` | GPU 刚体 + 玻璃火球 |
+| PhysX Collapse | `outputs/physx_collapse.png` | GPU 刚体 + OptiX IAS 实例化 |
 | Water Pool | `outputs/water_pool.png` | Beer-Lambert、水面法线 |
 | Sparky | `outputs/sparky.png` | OBJ / 纹理 / 聚光灯 |
 
@@ -48,4 +48,4 @@
 
 ---
 
-*版本对应 LumenCore ≈ 0.11.x。报告描述以当前源码为准；未实现特性（如 BDPT、完整光谱、玻璃 NEE）不会假装写进去。*
+*版本对应 LumenCore ≈ 0.12.x。报告描述以当前源码为准；未实现特性（如 BDPT、完整光谱、玻璃 NEE）不会假装写进去。*

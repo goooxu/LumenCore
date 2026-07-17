@@ -17,6 +17,7 @@
 | NEE | 下一事件估计 |
 | MIS | 多重重要性采样 |
 | GAS | 几何加速结构（OptiX） |
+| IAS | 实例加速结构（OptiX） |
 | SBT | Shader Binding Table |
 | HDRI | 高动态范围环境贴图 |
 | AOV | 任意输出变量（如 albedo、normal） |
