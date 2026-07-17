@@ -147,18 +147,6 @@ __forceinline__ __device__ float pdf_env_map(const float3 &dir) {
          (2.0f * 3.14159265f * 3.14159265f * sin_theta);
 }
 
-__forceinline__ __device__ bool refract(const float3 &v, const float3 &n, float eta,
-                                       float3 &out) {
-  const float cos_i = -nrtx::dot(v, n);
-  const float sin2_t = eta * eta * (1.0f - cos_i * cos_i);
-  if (sin2_t > 1.0f) {
-    return false;
-  }
-  const float cos_t = sqrtf(1.0f - sin2_t);
-  out = eta * v + (eta * cos_i - cos_t) * n;
-  return true;
-}
-
 __forceinline__ __device__ float3 beer_attenuate(const float3 &sigma, float dist) {
   return make_float3(expf(-sigma.x * dist), expf(-sigma.y * dist), expf(-sigma.z * dist));
 }
@@ -168,12 +156,6 @@ __forceinline__ __device__ void apply_medium_absorption(RadiancePRD *prd, float 
                       prd->medium_sigma.z > 0.0f)) {
     prd->throughput = prd->throughput * beer_attenuate(prd->medium_sigma, dist);
   }
-}
-
-__forceinline__ __device__ float fresnel_schlick(float cos_theta, float f0) {
-  const float m = 1.0f - cos_theta;
-  const float m2 = m * m;
-  return f0 + (1.0f - f0) * m2 * m2 * m;
 }
 
 __forceinline__ __device__ float3 sample_albedo_tex(const nrtx::TextureGPU &tex, float2 uv) {
@@ -725,26 +707,23 @@ extern "C" __global__ void __closesthit__radiance() {
   float pdf = 0.0f;
 
   if (is_glass) {
-    const float3 ior_n = front_facing ? ng : -ng;
-    const float eta = front_facing ? (1.0f / mat.ior) : mat.ior;
-    const float cos_theta = fminf(1.0f, fabsf(nrtx::dot(wo, ior_n)));
-    const float f0 = powf((1.0f - mat.ior) / (1.0f + mat.ior), 2.0f);
-    const float reflect_prob = fresnel_schlick(cos_theta, f0);
-    float3 refracted;
-    const bool reflect_only =
-        nrtx::rnd(prd->seed) < reflect_prob || !refract(ray_dir, ior_n, eta, refracted);
-    if (reflect_only) {
-      wi = nrtx::reflect(ray_dir, ior_n);
-    } else {
-      wi = nrtx::normalize(refracted);
+    // GGX microfacet dielectric (rough glass). No NEE/MIS in v1.
+    const nrtx::BsdfSample samp = nrtx::sample_dielectric_bsdf(
+        prd->seed, base, mat.roughness, mat.ior, n, wo, front_facing);
+    if (!samp.valid) {
+      prd->done = 1;
+      return;
+    }
+    wi = samp.wi;
+    f = samp.f;
+    pdf = samp.pdf;
+    if (samp.transmitted) {
       if (front_facing) {
         prd->medium_sigma = mat.absorption;
       } else {
         prd->medium_sigma = make_float3(0.0f, 0.0f, 0.0f);
       }
     }
-    f = make_float3(1.0f, 1.0f, 1.0f);
-    pdf = 1.0f;
   } else {
     const nrtx::BsdfSample samp =
         nrtx::sample_opaque_bsdf(prd->seed, base, mat.metallic, mat.roughness, n, wo);
@@ -757,9 +736,10 @@ extern "C" __global__ void __closesthit__radiance() {
     pdf = samp.pdf;
   }
 
-  prd->throughput = prd->throughput * f *
-                    (is_glass ? 1.0f : (nrtx::dot(wi, n) / fmaxf(pdf, 1e-8f)));
-  prd->last_pdf = is_glass ? 0.0f : pdf; // glass is delta-like; skip env MIS
+  // Dielectric sample returns VNDF MC weight in f with pdf=1 (no extra cos/pdf).
+  prd->throughput =
+      prd->throughput * f * (is_glass ? 1.0f : (nrtx::dot(wi, n) / fmaxf(pdf, 1e-8f)));
+  prd->last_pdf = is_glass ? 0.0f : pdf; // glass: skip env MIS
 
   // Russian roulette
   if (prd->depth > 3) {

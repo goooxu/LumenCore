@@ -16,13 +16,13 @@ Python / C++ 的 `Material` 大致包括：
 | `base_color` | 漫反射底色或金属反射色 |
 | `metallic` | 0 电介质 ↔ 1 金属 |
 | `roughness` | 0 光滑 ↔ 1 粗糙 |
-| `transmission` | >0.5 走理想玻璃路径 |
+| `transmission` | >0.5 走 GGX 粗糙玻璃路径 |
 | `ior` | 折射率（玻璃） |
 | `emission` | 自发光 |
 | `absorption` | 介质 Beer-Lambert 吸收 |
 | `albedo_tex` | 可选漫反射纹理 |
 
-不透明路径走 GGX；`transmission` 高则走理想电介质（镜面反射/折射），**目前没有粗糙透射**。
+不透明路径走 GGX；`transmission` 高则走 **GGX 微表面电介质**（粗糙透射/反射），仍支持 Beer-Lambert 吸收。
 
 ## 漫反射（Lambert）部分
 
@@ -68,33 +68,37 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 
 *图：后排金属球粗糙度递增；前排金属度递增。对应 `python/scenes/ggx_studio.py`。*
 
-## 理想玻璃
+## 玻璃：GGX 粗糙透射
 
 当 `transmission > 0.5`：
 
-1. 用 Schlick 近似算反射概率；
-2. 以该概率反射，否则折射（Snell）；
-3. 进入介质时可设置 `medium_sigma = absorption`（Beer-Lambert，见 [06](06-volumes-media.md)）。
+1. 用 **VNDF** 采样微表面法线 $`h`$（与不透明镜面相同）；
+2. 在 $`h`$ 上算 Schlick Fresnel，按概率选择**反射**或**折射**（Snell 关于 $`h`$）；
+3. 用 Heitz 风格权重 $`G_1(\omega_i)`$ 更新吞吐（实现里 `pdf=1`，`f` 已含蒙特卡洛权重）；
+4. 进入介质时可设置 `medium_sigma = absorption`（Beer-Lambert，见 [06](06-volumes-media.md)）。
+
+粗糙度低 → 接近清晰玻璃；粗糙度高 → 磨砂/雾化折射。
 
 ![Fresnel 反射/折射](figures/fresnel-refract.png)
 
-*图：空气→玻璃界面上，入射光分成反射与折射。掠射角时反射更强（Fresnel）。*
+图注：空气→玻璃界面上，入射光分成反射与折射。掠射角时反射更强（Fresnel）。粗糙时这些方向绕微法线散开。
 
-玻璃路径在实现里近似为 **delta**（`pdf=1`，吞吐不除 pdf），且不与 NEE 做不透明那套 MIS。
+首版玻璃路径**不做**与面光/HDRI 的 NEE/MIS（与旧理想玻璃策略一致），避免双计。
 
 ## 代码地图
 
 | 函数 | 文件 | 作用 |
 |------|------|------|
-| `eval_opaque_bsdf` | `bsdf.h` | 求值 + pdf |
-| `sample_opaque_bsdf` | `bsdf.h` | 采样下一方向 |
-| closesthit 玻璃分支 | `shaders.cu` | Fresnel + refract |
+| `eval_opaque_bsdf` | `bsdf.h` | 不透明求值 + pdf |
+| `sample_opaque_bsdf` | `bsdf.h` | 不透明采样 |
+| `sample_dielectric_bsdf` | `bsdf.h` | GGX 玻璃反射/透射采样 |
+| closesthit 玻璃分支 | `shaders.cu` | 调用 dielectric 采样 + 介质 |
 | `Material` | `nrtx.h` / bindings | 主机侧参数 |
 
 ## 小结
 
 - 不透明：GGX 金属度-粗糙度。
-- 玻璃：理想折射/反射 + 可选吸收。
-- 看 `ggx_studio` 最容易对照参数。
+- 玻璃：GGX 粗糙透射/反射 + 可选吸收。
+- 看 `ggx_studio` 第三排（玻璃粗糙度渐变）最容易对照。
 
 下一章：[05 NEE、MIS 与 HDRI](05-nee-mis-hdri.md)。

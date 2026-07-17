@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GGX studio showcase: metallic roughness gradient under HDRI lighting."""
+"""GGX studio showcase: metal / dielectric / rough-glass rows under HDRI."""
 from __future__ import print_function
 
 import os
@@ -70,11 +70,19 @@ def main():
         x = -2.5 + i * 1.0
         scene.add_mesh(lc.make_uv_sphere((x, 0.45, 1.5), 0.38, mat))
 
-    # Reference glass (ideal dielectric path)
-    glass = scene.add_material(
-        lc.Material(base_color=(1, 1, 1), roughness=0.0, transmission=1.0, ior=1.5)
-    )
-    scene.add_mesh(lc.make_uv_sphere((0.0, 0.55, -1.4), 0.5, glass))
+    # Glass row: roughness 0.02 → ~0.55 (GGX microfacet transmission)
+    for i in range(6):
+        rough = 0.02 + 0.10 * i
+        mat = scene.add_material(
+            lc.Material(
+                base_color=(1.0, 1.0, 1.0),
+                roughness=rough,
+                transmission=1.0,
+                ior=1.5,
+            )
+        )
+        x = -2.5 + i * 1.0
+        scene.add_mesh(lc.make_uv_sphere((x, 0.45, -1.5), 0.40, mat))
 
     # Soft fill so shadowed sides aren't black (HDRI is primary)
     scene.add_spot_light(

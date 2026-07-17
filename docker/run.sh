@@ -36,6 +36,20 @@ LD_EXTRA="/work/third_party/physx/bin:/usr/lib/x86_64-linux-gnu"
 
 # NFS scratch is often not writable as root inside Docker; build/output stay on local disk.
 # Mount driver OptiX/RTX libraries — stock CUDA images do not ship them.
+# Do NOT bind-mount libnvoptix.so.1: nvidia-container-toolkit already injects it
+# and a duplicate mount causes "device or resource busy".
+# libnvidia-rtcore is usually NOT injected — mount the host versioned .so.
+RTCORE_VER="$(ls /usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so.* 2>/dev/null | grep -v '\.1$' | head -1 || true)"
+if [[ -z "${RTCORE_VER}" ]]; then
+  echo "error: libnvidia-rtcore.so.* not found on host" >&2
+  exit 1
+fi
+NVOPTIX_VER="$(readlink -f /usr/lib/x86_64-linux-gnu/libnvoptix.so.1 2>/dev/null || true)"
+OPTIX_MOUNT_ARGS=()
+if [[ -n "${NVOPTIX_VER}" && -f "${NVOPTIX_VER}" ]]; then
+  # Provide the versioned soname the .so.1 symlink resolves to (toolkit may omit it).
+  OPTIX_MOUNT_ARGS+=(-v "${NVOPTIX_VER}:${NVOPTIX_VER}:ro")
+fi
 docker run --rm --gpus all \
   -u "$(id -u):$(id -g)" \
   -v "${ROOT}:/work:ro" \
@@ -43,9 +57,8 @@ docker run --rm --gpus all \
   -v "${OUT_DIR}:/results" \
   -v "${CMAKE_DIR}:/cmake:ro" \
   -v /usr/share/nvidia:/usr/share/nvidia:ro \
-  -v /usr/lib/x86_64-linux-gnu/libnvoptix.so.1:/usr/lib/x86_64-linux-gnu/libnvoptix.so.1:ro \
-  -v /usr/lib/x86_64-linux-gnu/libnvoptix.so.615.36:/usr/lib/x86_64-linux-gnu/libnvoptix.so.615.36:ro \
-  -v /usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so.615.36:/usr/lib/x86_64-linux-gnu/libnvidia-rtcore.so.615.36:ro \
+  -v "${RTCORE_VER}:${RTCORE_VER}:ro" \
+  "${OPTIX_MOUNT_ARGS[@]}" \
   -w /out \
   -e PATH=/cmake/bin:/usr/local/cuda/bin:/usr/bin:/bin \
   -e LD_LIBRARY_PATH="${LD_EXTRA}" \

@@ -5,6 +5,19 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-07-17
+
+### Added
+
+- **GGX rough transmission** for dielectrics (`transmission > 0.5`): microfacet VNDF sample + Fresnel reflect/refract about the half-vector (`sample_dielectric_bsdf` in `bsdf.h`)
+- `ggx_studio` glass roughness row; `materials_ball` glass row uses roughness gradient
+
+### Changed
+
+- Glass shading path no longer uses ideal delta Snell only; low roughness still reads as clear glass, high roughness as frosted
+- Docs/report updated for rough glass (still no glass NEE/MIS in this release)
+- `docker/run.sh`: auto-detect host `libnvidia-rtcore` / OptiX sonames; avoid bind-mounting `libnvoptix.so.1` (conflicts with nvidia-container-toolkit)
+
 ## [0.10.2] - 2026-07-16
 
 ### Added

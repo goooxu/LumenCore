@@ -12,7 +12,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ![GGX Studio](outputs/ggx_studio.png)
 
-Metal roughness row + metallic color row under an importance-sampled **HDRI** (`Scene.load_env_map`) with GGX microfacet BRDF and balance MIS. Glass sphere keeps the ideal dielectric path for reference.
+Metal roughness row + metallic color row + **glass roughness row** under an importance-sampled **HDRI** (`Scene.load_env_map`) with GGX microfacet BRDF/BTDF and balance MIS on opaque paths.
 
 ### Fireplace (volumetric flame)
 
@@ -64,7 +64,7 @@ Open deep water with a **calm procedural surface** (`make_water_surface` + analy
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
 - Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights + HDRI)
-- Russian Roulette; **GGX** opaque materials + ideal glass
+- Russian Roulette; **GGX** opaque materials + **GGX rough glass** (microfacet transmission)
 - **HDRI env maps** (`Scene.load_env_map`) with CDF importance sampling and balance MIS
 - Triangle-mesh GAS on OptiX RT Cores
 - Wavefront **OBJ** import (`load_obj`, optional `usemtl` material map, **UV / `vt`**)
@@ -155,7 +155,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 | Scene | Resolution | Notes |
 |-------|------------|-------|
-| ggx_studio | 2560×1440 | HDRI + GGX roughness / metallic showcase |
+| ggx_studio | 2560×1440 | HDRI + GGX metal / dielectric / rough-glass rows |
 | cornell | 2048×2048 | ~1.51 s @ 256 spp |
 | materials_ball | 2560×1440 | HDRI-lit material chart |
 | outdoor_env | 2560×1440 | HDRI + soft fill |

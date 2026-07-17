@@ -55,11 +55,12 @@ def main() -> int:
             elif row == 1:
                 mat = lc.Material(base_color=colors[idx % 6], metallic=1.0, roughness=0.05 + 0.25 * col)
             else:
+                # Glass row: roughness gradient (frosted → clear)
                 mat = lc.Material(
                     base_color=(1, 1, 1),
                     transmission=1.0,
-                    ior=1.1 + 0.2 * col,
-                    roughness=0.0,
+                    ior=1.5,
+                    roughness=0.02 + 0.18 * col,
                 )
             mid = scene.add_material(mat)
             x = -1.5 + col * 1.0

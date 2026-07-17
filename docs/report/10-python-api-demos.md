@@ -43,7 +43,7 @@ lc.Renderer().render(scene, cam, cfg)
 
 ![GGX Studio](../../outputs/ggx_studio.png)
 
-粗糙度 / 金属度梯度 + `studio.hdr`。脚本：`ggx_studio.py`。
+粗糙度 / 金属度 / **玻璃粗糙度**梯度 + `studio.hdr`。脚本：`ggx_studio.py`。
 
 ### Fireplace — 体积光
 
