@@ -1,6 +1,6 @@
 # LumenCore
 
-NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CUDA 13** path tracing. Gallery renders validated on **GB200** (`10.85.120.24`, 4×GPU) and previously on **RTX 5090**.
+NVIDIA GPU dual-stack showcase: **PhysX 5** rigid-body dynamics + **OptiX 9 / CUDA 13** path tracing.
 
 See [CHANGELOG.md](CHANGELOG.md) for version history.
 
@@ -12,7 +12,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ![Atelier showcase](outputs/gallery/showcase.png)
 
-一帧里叠满 LumenCore 双栈能力：**PhysX** 短仿真后定格刚体砖堆，经 **OptiX IAS** 实例化再路径追踪；同框还有壁炉火焰体积、HDRI/面光/聚光与 NEE、GGX 金属与磨砂玻璃、Sparky 法线贴图、Capsule、**Spot** 奶牛，以及浅水池的 Beer-Lambert 吸收。脚本：`python/scenes/atelier.py`（2560×1440）。
+冷灰墙的工作室一角：后墙壁炉里一团程序化火焰把石台与冷灰烬染成暖橙；炉前彩色砖块、金属球、磨砂玻璃球，以及 Capsule、Spot、Sparky，都从空中落入场景，完全由 PhysX 短仿真算出落定姿态，再交给 OptiX IAS 画出——没有事后手调位姿。右前方浅石盆里一汪带 Beer-Lambert 衰减的清水，金属罐与小银球靠墙摆着；顶光与聚光在地面上投下软阴影，HDRI 把高光擦在金属与玻璃上。整帧是渲染器能力的总览，不是单特性样张。脚本：`python/scenes/atelier.py`（2560×1440）。
 
 ### 特性对比（同机位 ON / OFF）
 
@@ -28,7 +28,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 #### Next Event Estimation
 
-暗环境 + 面光：开 NEE 后阴影更干净、方差更低。
+暗环境 + 面光：开 NEE 后阴影更干净、方差更低；关 NEE 只能靠 BSDF 偶然撞上发光面，同 spp 下噪点/火飞更明显。
 
 | ON | OFF |
 |----|-----|
@@ -80,7 +80,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Requirements
 
-- NVIDIA GPU with RT Cores (tested: GB200 @ `10.85.120.24`, RTX 5090)
+- NVIDIA GPU with RT Cores
 - Docker with CUDA 13+ toolkit (default base: `nvidia/cuda:13.0.1-devel-ubuntu24.04`; `docker/run.sh` builds `lumencore-build:cuda13` with Python headers)
 - OptiX denoiser weights at `/usr/share/nvidia/nvoptix.bin`
 - Vendored OptiX 9 headers under `third_party/optix`
@@ -159,7 +159,7 @@ lc.Renderer().render(scene, cam, cfg)
 | `outputs/` | Legacy per-scene stills (report chapters) |
 | `outputs/gallery/` | Homepage two-tier gallery (`showcase.png` + `compare/`) |
 
-## Performance (GB200 @ 10.85.120.24, denoised)
+## Performance (denoised)
 
 | Scene | Resolution | Notes |
 |-------|------------|-------|
@@ -167,7 +167,7 @@ lc.Renderer().render(scene, cam, cfg)
 | gallery compare (×10) | 1024×1024 | ON/OFF pairs; denoiser uses low spp |
 | Legacy demos (`outputs/*.png`) | 2K class | Still used by `docs/report/` chapters |
 
-Parallel gallery render: `NRTX_PHYSX_ROOT=... ./scripts/render_gallery.sh` (uses `NRTX_GPU` round-robin).
+Parallel gallery render: `./scripts/render_gallery.sh` (optional `NRTX_PHYSX_ROOT` / `NRTX_GPU` round-robin).
 
 ## License
 

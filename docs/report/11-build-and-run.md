@@ -2,7 +2,7 @@
 
 ## 环境要点
 
-- NVIDIA GPU（带 RT Core；项目在 **RTX 5090** 验证）
+- NVIDIA GPU（带 RT Core）
 - Docker + CUDA 13 开发镜像（`docker/run.sh` 会准备带 Python 头文件的构建镜像）
 - OptiX 头文件在 `third_party/optix`
 - PhysX 静态库在 `third_party/physx/lib`，GPU 库 `third_party/physx/bin/libPhysXGpu_64.so`
@@ -16,7 +16,7 @@
 chmod +x docker/run.sh scripts/setup_physx.sh
 ./scripts/setup_physx.sh   # 若尚未有 PhysX 库
 
-# 配置并编译（架构按 GPU 调整，5090 常用 120）
+# 配置并编译（CMAKE_CUDA_ARCHITECTURES 按本机 GPU 设定）
 ./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
 
 # 渲染示例

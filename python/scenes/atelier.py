@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """LumenCore gallery showcase: multi-feature atelier (PhysX freeze + OptiX path trace).
 
-Packs PhysX/IAS bricks, flame volume, HDRI+NEE, GGX metal/glass, Sparky normals,
-Capsule, Spot cow, and a small Beer-Lambert water basin into one 2K still.
+Movable props and character OBJs settle under PhysX; OptiX IAS instances use final poses.
+Also packs flame volume, HDRI+NEE, GGX metal/glass, Sparky normals, and Beer-Lambert water.
 """
 from __future__ import annotations
 
@@ -52,11 +52,11 @@ def main() -> int:
     out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/showcase.png"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 192
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
-    sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 90
+    sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 240
 
     Path(out).parent.mkdir(parents=True, exist_ok=True)
 
-    # --- PhysX: short tumble of colored bricks, then freeze poses ---------------
+    # --- PhysX: bricks + ball + character proxies settle, then freeze poses ------
     world = lc.PhysXWorld()
     world.init()
     print(f"[atelier] PhysX backend: {world.backend()}", flush=True)
@@ -81,15 +81,60 @@ def main() -> int:
             aid = world.add_dynamic_box(brick_half, 1.0, lc.Pose(position=(x, y, z)))
             brick_actors.append((aid, palette[(ix + iy * 3) % len(palette)]))
 
-    # Gentle push so the pile settles into a natural heap.
-    ball_id = world.add_dynamic_sphere(0.22, 6.0, lc.Pose(position=(-1.6, 0.9, -0.2)))
-    world.set_linear_velocity(ball_id, (2.4, -0.2, 0.15))
+    # Static environment colliders (match the baked room props below). Dynamics rest on these.
+    world.add_static_box((0.55, 0.05, 0.45), lc.Pose(position=(0.0, 0.05, -2.0)))  # hearth slab
+    world.add_static_box((0.15, 0.24, 0.15), lc.Pose(position=(1.70, 0.24, -0.70)))  # metal can
+    world.add_static_box((0.50, 0.04, 0.45), lc.Pose(position=(1.85, 0.04, 1.30)))  # water basin
+
+    # Movable actors: drop-in spawn only. Final world poses come solely from PhysX settle.
+    capsule_scale = 0.55
+    capsule_half = (0.38, 1.0 * capsule_scale, 0.30)
+    capsule_id = world.add_dynamic_box(
+        capsule_half,
+        12.0,
+        lc.Pose(
+            position=(-2.2, 1.8, 1.2),
+            quat=quat_axis_angle((0.0, 1.0, 0.0), 0.4),
+        ),
+    )
+
+    spot_scale = 0.70
+    spot_ymin, spot_ymax = -0.736784, 0.953646
+    spot_h = (spot_ymax - spot_ymin) * spot_scale
+    spot_half = (0.40, spot_h * 0.5, 0.58)
+    spot_id = world.add_dynamic_box(
+        spot_half,
+        14.0,
+        lc.Pose(
+            position=(0.2, 1.6, 1.3),
+            quat=quat_axis_angle((0.0, 1.0, 0.0), math.radians(15)),
+        ),
+    )
+
+    sparky_scale = 0.55
+    sparky_ymin, sparky_ymax = -0.002721, 2.09
+    sparky_h = (sparky_ymax - sparky_ymin) * sparky_scale
+    sparky_half = (0.42, sparky_h * 0.5, 0.24)
+    sparky_id = world.add_dynamic_box(
+        sparky_half,
+        12.0,
+        lc.Pose(
+            position=(2.2, 1.8, 0.4),
+            quat=quat_axis_angle((0.0, 1.0, 0.0), -0.5),
+        ),
+    )
+
+    glass_r = 0.28
+    glass_id = world.add_dynamic_sphere(glass_r, 2.2, lc.Pose(position=(2.0, 1.4, 0.2)))
+
+    ball_id = world.add_dynamic_sphere(0.22, 6.0, lc.Pose(position=(-1.5, 1.2, -0.35)))
+    world.set_linear_velocity(ball_id, (2.6, -0.2, 0.0))
 
     for _ in range(sim_steps):
         world.step(1.0 / 60.0, 1)
     print(f"[atelier] sim settled after {sim_steps} steps", flush=True)
 
-    # --- Render scene (IAS for PhysX + identity meshes for characters/props) ---
+    # --- Render scene (static room + PhysX-driven IAS instances) ---
     scene = lc.Scene()
     hdri = resolve_asset("assets/env/studio.hdr")
     if Path(hdri).is_file():
@@ -148,10 +193,9 @@ def main() -> int:
         add_proxy_light=True,
     )
 
-    # Metal can + frosted glass orb (GGX showcase props)
+    # Static props (colliders registered above; not pose-driven).
     scene.add_mesh(lc.make_box((1.55, 0.0, -0.85), (1.85, 0.48, -0.55), metal_m))
     scene.add_mesh(lc.make_uv_sphere((1.70, 0.68, -0.70), 0.18, metal_m, 40, 20))
-    scene.add_mesh(lc.make_uv_sphere((-1.55, 0.28, 0.55), 0.28, glass_m, 48, 24))
 
     # Shallow water basin with Beer-Lambert
     scene.add_mesh(lc.make_box((1.35, 0.0, 0.85), (2.35, 0.08, 1.75), stone_m))
@@ -260,22 +304,29 @@ def main() -> int:
         "mascot_antenna_tip": tip,
     }
 
+    # Character OBJs: local prototypes centered on the collider origin; world pose = PhysX only.
     sparky = lc.load_obj(resolve_asset("assets/models/sparky.obj"), sparky_mtl, plastic_white)
-    sparky = lc.transform_mesh(sparky, (1.05, 0.0, 0.15), (0.55, 0.55, 0.55), (0.0, -0.55, 0.0))
-    scene.add_mesh(sparky)
+    sparky_cy = sparky_ymin * sparky_scale + sparky_h * 0.5
+    sparky = lc.transform_mesh(
+        sparky, (0.0, -sparky_cy, 0.0), (sparky_scale,) * 3, (0.0, 0.0, 0.0)
+    )
+    sparky_proto = scene.add_mesh(sparky)
 
     capsule = lc.load_obj(resolve_asset("assets/models/capsule_mascot.obj"), capsule_mtl, yellow)
-    capsule = lc.transform_mesh(capsule, (-1.35, 0.0, 0.35), (0.55, 0.55, 0.55), (0.0, 0.4, 0.0))
-    scene.add_mesh(capsule)
+    capsule_cy = 0.0 * capsule_scale + (2.0 * capsule_scale) * 0.5  # ymin=0, height=2
+    capsule = lc.transform_mesh(
+        capsule, (0.0, -capsule_cy, 0.0), (capsule_scale,) * 3, (0.0, 0.0, 0.0)
+    )
+    capsule_proto = scene.add_mesh(capsule)
 
     spot_mat = scene.add_material(
         lc.Material(base_color=(1.0, 1.0, 1.0), roughness=0.55, albedo_tex=spot_tex)
     )
     spot = lc.load_obj(resolve_asset("assets/models/spot_triangulated.obj"), spot_mat)
-    # Spot is roughly unit-sized; stand on floor, face camera-ish.
-    spot = lc.transform_mesh(spot, (0.15, 0.0, 0.85), (0.85, 0.85, 0.85), (0.0, math.radians(25), 0.0))
-    scene.add_mesh(spot)
-    print("[atelier] loaded Sparky + Capsule + Spot", flush=True)
+    spot_cy = spot_ymin * spot_scale + spot_h * 0.5
+    spot = lc.transform_mesh(spot, (0.0, -spot_cy, 0.0), (spot_scale,) * 3, (0.0, 0.0, 0.0))
+    spot_proto = scene.add_mesh(spot)
+    print("[atelier] loaded Sparky + Capsule + Spot (PhysX IAS)", flush=True)
 
     # PhysX prototypes + instances
     box_proto: dict[tuple, int] = {}
@@ -294,8 +345,7 @@ def main() -> int:
             box_proto[key] = scene.add_mesh(_local_box(half, mat))
         return box_proto[key]
 
-    floor_proto = scene.add_mesh(_local_box(ground_half, floor_m))
-    scene.add_instance(floor_proto, world.get_pose(ground_id))
+    _ = ground_id  # collider only; visible floor is the make_quad above
 
     for aid, color in brick_actors:
         mid = box_id(brick_half, brick_mat(color))
@@ -306,6 +356,13 @@ def main() -> int:
     )
     ball_proto = scene.add_mesh(lc.make_uv_sphere((0, 0, 0), 0.22, ball_mat, 40, 20))
     scene.add_instance(ball_proto, world.get_pose(ball_id))
+
+    glass_proto = scene.add_mesh(lc.make_uv_sphere((0, 0, 0), glass_r, glass_m, 48, 24))
+    scene.add_instance(glass_proto, world.get_pose(glass_id))
+
+    scene.add_instance(capsule_proto, world.get_pose(capsule_id))
+    scene.add_instance(spot_proto, world.get_pose(spot_id))
+    scene.add_instance(sparky_proto, world.get_pose(sparky_id))
 
     # Lights
     scene.add_quad_light((-0.35, 2.85, -0.2), (0.7, 0, 0), (0, 0, 0.55), (6.0, 5.6, 5.0))

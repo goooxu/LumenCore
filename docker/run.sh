@@ -39,7 +39,7 @@ if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
   IMAGE="lumencore-build:cuda13"
 fi
 
-# Host multiarch lib dirs (x86_64 and aarch64 GB200).
+# Host multiarch lib dirs (x86_64 and aarch64).
 LIB_DIRS=(/usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu)
 HOST_LIB_DIR=""
 for d in "${LIB_DIRS[@]}"; do

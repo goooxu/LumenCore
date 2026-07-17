@@ -19,7 +19,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - README homepage Gallery no longer tiles the eight legacy demo stills (those PNGs remain for `docs/report/`)
 - `docker/run.sh` accepts `NRTX_GPU=<index>` for `--gpus device=N` parallel jobs
-- Docs/report intro + models README note Spot in `atelier`; Performance notes use test host `10.85.120.24` (GB200×4)
+- Docs/report intro + models README note Spot in `atelier`
 - `docker/run.sh` / `scripts/setup_physx.sh`: aarch64 host support (`NRTX_PHYSX_ROOT`, multiarch OptiX libs, arch-matched CMake)
 
 ## [0.13.0] - 2026-07-17

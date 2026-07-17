@@ -48,7 +48,7 @@
 ## 配图说明
 
 - `figures/`：概念示意图（半球、路径、微表面、NEE/MIS、HDRI、体积、Fresnel、OptiX、PhysX 循环）
-- `../../outputs/`：本仓库在 RTX 5090 上渲出的真实结果图
+- `../../outputs/`：本仓库渲出的真实结果图
 
 ---
 
