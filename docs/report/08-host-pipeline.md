@@ -10,8 +10,7 @@ flowchart LR
   accel --> loop[循环optixLaunch]
   loop --> accum[累加缓冲]
   accum --> denoise[可选Denoiser]
-  denoise --> tonemap[ACES加gamma]
-  tonemap --> png[写PNG]
+  denoise --> heic[写HDR_HEIC]
 ```
 
 *图：Host 侧从上传到出图。*
@@ -41,9 +40,9 @@ flowchart LR
 `optixDenoiserCreate`（HDR 模型）→ `Setup` → `Invoke`。  
 输入：嘈杂的 HDR 累加；输出：平滑很多的 HDR 图。
 
-### 6. 色调映射与 PNG
+### 6. HDR HEIC 写出
 
-线性 HDR 不能直接当 8-bit 图。本项目用 **ACES** 近似后接 gamma，再经 `stb_image_write` 写 PNG。
+去噪后的线性 radiance 经自动曝光映射到 nits，再 Rec.709→Rec.2020、PQ（ST 2084），由 `libheif` / x265 写成 `.heic`（见 `src/host/heic_writer.cpp`）。不再支持 PNG 输出。
 
 ## 相机模型
 

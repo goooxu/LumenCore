@@ -14,8 +14,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
-- All scene defaults and Gallery paths use `.heic` (`.png` still selects legacy ACES gamma PNG)
+- All scene defaults and Gallery paths use `.heic`
 - README / report Markdown image links point at `.heic`
+- **PNG render output removed**: only `.heic` / `.heif` accepted; ACES/`stb_image_write` path deleted
 
 ## [0.15.0] - 2026-07-17
 

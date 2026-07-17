@@ -293,7 +293,7 @@ def main() -> int:
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 128
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 
-    if out_arg.suffix.lower() in (".png", ".heic", ".heif"):
+    if out_arg.suffix.lower() in (".heic", ".heif"):
         hero_path = out_arg
         frames_dir = out_arg.parent / out_arg.stem
     else:
@@ -430,22 +430,9 @@ def main() -> int:
         world.step(1.0 / 60.0, 1)
         step_i += 1
 
-    # Optional contact sheet (Pillow may be missing in the CUDA build image).
-    sheet_path = frames_dir / "contact_sheet.png"
-    try:
-        from PIL import Image  # type: ignore
-
-        picks = frame_paths[:: max(1, len(frame_paths) // 6)][:6]
-        if picks:
-            imgs = [Image.open(p) for p in picks]
-            w, h = imgs[0].size
-            sheet = Image.new("RGB", (w * len(imgs), h))
-            for i, im in enumerate(imgs):
-                sheet.paste(im, (i * w, 0))
-            sheet.save(sheet_path)
-            print(f"[physx_collapse] contact sheet → {sheet_path}", flush=True)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[physx_collapse] contact sheet skipped ({exc})", flush=True)
+    # Optional contact sheet skipped: Pillow cannot open HEIC in the CUDA image.
+    sheet_path = frames_dir / "contact_sheet.heic"
+    print(f"[physx_collapse] contact sheet skipped (no HEIC sheet writer); see {sheet_path.name}", flush=True)
 
     print(f"[physx_collapse] done. frames={len(frame_paths)} backend={world.backend()}", flush=True)
     # Drop renderer before PhysX so OptiX/CUDA tear down ahead of the GPU scene.

@@ -136,7 +136,7 @@ struct RenderConfig {
   int max_depth = 16;
   bool denoise = true;
   bool enable_nee = true;
-  std::string output_path = "out.png";
+  std::string output_path = "out.heic";
 };
 
 class Renderer {

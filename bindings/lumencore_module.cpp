@@ -155,7 +155,7 @@ PYBIND11_MODULE(lumencore, m) {
            }),
            py::arg("width") = 1024, py::arg("height") = 1024, py::arg("spp") = 256,
            py::arg("samples_per_launch") = 1, py::arg("max_depth") = 16, py::arg("denoise") = true,
-           py::arg("enable_nee") = true, py::arg("output_path") = "out.png")
+           py::arg("enable_nee") = true, py::arg("output_path") = "out.heic")
       .def_readwrite("width", &RenderConfig::width)
       .def_readwrite("height", &RenderConfig::height)
       .def_readwrite("spp", &RenderConfig::spp)

@@ -88,7 +88,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - Procedural water surfaces (`make_water_surface` with analytic normals)
 - Optional mesh **vertex normals** / auto **tangents** (`ensure_mesh_tangents`) for smooth shading and normal maps
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
-- HDR HEIC output (PQ / Rec.2020, 10-bit); optional ACES gamma PNG via `.png` path
+- HDR HEIC output only (PQ / Rec.2020 via libheif); `.heic` / `.heif` required
 
 ## Requirements
 
@@ -163,7 +163,7 @@ lc.Renderer().render(scene, cam, cfg)
 | `python/scenes/` | Scene scripts (`atelier`, cover scenes, `gallery_compare`, plus legacy demos) |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
-| `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, HEIC/PNG I/O |
+| `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, HEIC I/O |
 | `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` (or `PHYSX_INSTALL`) |
 | `scripts/render_gallery.sh` | Multi-GPU gallery showcase + compare renders |
 | `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |

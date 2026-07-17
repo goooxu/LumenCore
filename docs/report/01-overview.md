@@ -26,10 +26,10 @@ flowchart LR
   gas --> optix
   optix --> aov[Accum_AOV]
   aov --> denoise[OptiX_Denoiser]
-  denoise --> png[PNG_ACES]
+  denoise --> heic[HDR_HEIC]
 ```
 
-*图：从 Python 场景脚本到最终 PNG 的主数据流。*
+*图：从 Python 场景脚本到最终 HEIC 的主数据流。*
 
 逐步说明：
 
@@ -39,7 +39,7 @@ flowchart LR
 | Host 准备 | `src/host/renderer.cpp` 等 | 上传 GPU 缓冲、建加速结构 |
 | （可选）仿真 | `PhysXWorld` | `step` → `get_pose` |
 | 光线追踪 | `src/device/shaders.cu` | 每个像素发射多条路径 |
-| 后处理 | Denoiser + ACES | 降噪、色调映射、写 PNG |
+| 后处理 | Denoiser + HEIC | 降噪后写 HDR HEIC（PQ / Rec.2020） |
 
 没有 PhysX 的场景（如 Cornell Box）会跳过中间的仿真步，直接渲染静态网格。
 

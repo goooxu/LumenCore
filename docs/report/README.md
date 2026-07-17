@@ -4,7 +4,7 @@
 
 本报告与仓库源码一一对应；公式先讲直觉，再落到 `src/`、`python/scenes/` 里的具体函数。
 
-**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 含综合展示 `showcase.heic`、两封面（`dusk_observatory.png` / `assembly_hall.png`）与 `compare/` 特性 ON/OFF。本报告各章仍链接 `outputs/*.heic` 旧单图，便于对照单特性。
+**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 含综合展示 `showcase.heic`、两封面（`dusk_observatory.heic` / `assembly_hall.heic`）与 `compare/` 特性 ON/OFF。本报告各章仍链接 `outputs/*.heic` 旧单图，便于对照单特性。
 
 ## 建议阅读路线
 
