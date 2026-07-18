@@ -33,15 +33,16 @@ if [[ ! -x "${CMAKE_DIR}/bin/cmake" ]] || ! "${CMAKE_DIR}/bin/cmake" --version >
   tar -xzf /tmp/cmake-linux.tgz -C "${CMAKE_DIR}" --strip-components=1
 fi
 
-# CUDA image + Python headers + libavif (HDR AVIF I/O).
-BUILD_IMAGE_TAG="lumencore-build:cuda13-avif"
+# CUDA image + Python headers + libavif (HDR AVIF I/O) + ffmpeg (HDR AV1 video).
+BUILD_IMAGE_TAG="lumencore-build:cuda13-avif-ffmpeg"
 if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
   if ! docker image inspect "${BUILD_IMAGE_TAG}" >/dev/null 2>&1; then
-    echo "Building ${BUILD_IMAGE_TAG} (python3-dev + libavif) ..."
+    echo "Building ${BUILD_IMAGE_TAG} (python3-dev + libavif + ffmpeg) ..."
     docker run --name lumencore-pysetup "${IMAGE}" bash -lc \
       "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
         python3 python3-dev git pkg-config \
-        libavif-dev libaom-dev libavif-bin"
+        libavif-dev libaom-dev libavif-bin \
+        ffmpeg"
     docker commit lumencore-pysetup "${BUILD_IMAGE_TAG}"
     docker rm lumencore-pysetup
   fi

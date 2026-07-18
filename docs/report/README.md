@@ -44,6 +44,7 @@
 | GGX Studio | `outputs/ggx_studio.avif` | GGX 粗糙度 / 金属度、HDRI |
 | Fireplace | `outputs/fireplace.avif` | 火焰体积、暗场景、吉祥物材质 |
 | PhysX Collapse | `outputs/physx_collapse.avif` | GPU 刚体 + OptiX IAS 实例化 |
+| Beacon Loop | `outputs/beacon_loop.mkv` | 逐帧 HDR AVIF → HDR AV1 视频 |
 | Water Pool | `outputs/water_pool.avif` | Beer-Lambert、水面法线 |
 | Sparky | `outputs/sparky.avif` | OBJ / albedo+法线贴图 / 聚光灯 |
 

@@ -128,11 +128,15 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.avif 128 1 1'
 ./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.avif 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/water_pool.py /results/water_pool.avif 256 1'
+# HDR AV1 video demo (5 s / 720p / 24 fps → 120 frames; slow)
+./docker/run.sh 'python3 /work/python/scenes/beacon_loop.py /results/beacon_loop.mkv 64 1'
 ```
 
 CLI: `python3 <scene.py> [out.avif] [spp] [denoise=1|0]`
 
 `physx_collapse` writes a frame sequence under `<out_stem>/` plus a gallery hero AVIF (pick any frame for the homepage).
+
+`beacon_loop` writes `frame_XXXX.avif` under `<out_stem>/` then muxes **HDR AV1** (PQ / BT.2020) into `.mkv` via ffmpeg. Extra args: `[frames] [fps]` (defaults 120 / 24).
 
 `fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
 
@@ -163,7 +167,8 @@ lc.Renderer().render(scene, cam, cfg)
 |------|------|
 | `docs/report/` | 中文技术报告（分章 Markdown + `figures/`） |
 | `bindings/` | pybind11 module `lumencore` |
-| `python/scenes/` | Scene scripts (`atelier`, cover scenes, `gallery_compare`, plus legacy demos) |
+| `python/scenes/` | Scene scripts (`atelier`, cover scenes, `gallery_compare`, `beacon_loop`, plus legacy demos) |
+| `python/video_render.py` | Per-frame HDR AVIF loop + ffmpeg HDR AV1 (`.mkv`) mux |
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, AVIF I/O |
@@ -183,6 +188,7 @@ lc.Renderer().render(scene, cam, cfg)
 | gallery showcase (`atelier`) | 2560×1440 | PhysX settle + multi-feature still |
 | gallery covers (`dusk_observatory`, `assembly_hall`) | 2560×1440 | Coastal dusk + factory noon covers |
 | gallery compare (×10) | 1024×1024 | ON/OFF pairs; denoiser uses low spp |
+| `beacon_loop` video | 1280×720 × 120 @ 24 fps | HDR AV1 `.mkv` (water + flame + orbit) |
 | Legacy demos (`outputs/*.avif`) | 2K class | Still used by `docs/report/` chapters |
 
 Parallel gallery render: `./scripts/render_gallery.sh` (optional `NRTX_PHYSX_ROOT` / `NRTX_GPU` round-robin).

@@ -24,6 +24,8 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.avif 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.avif 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.avif 96 1'
+# HDR AV1 video (slow: 120 frames @ 720p)
+./docker/run.sh 'python3 /work/python/scenes/beacon_loop.py /results/beacon_loop.mkv 48 1'
 ```
 
 `docker/run.sh` 把仓库挂到 `/work`（只读），构建目录与结果在宿主机临时目录（如 `/tmp/LumenCore-build`、`/tmp/LumenCore-out`），避免 NFS 上以 root 写失败。
@@ -49,6 +51,7 @@ flowchart LR
 | 06 火焰 | `fireplace.py` |
 | 06 水 | `water_pool.py` |
 | 09 PhysX | `physx_collapse.py` |
+| HDR AV1 视频 | `beacon_loop.py` |
 | 基础路径追踪 | `cornell.py` |
 
 ## 常见坑

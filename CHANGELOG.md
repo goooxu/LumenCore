@@ -5,6 +5,17 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2026-07-18
+
+### Added
+
+- **HDR AV1 video** path: [`python/video_render.py`](python/video_render.py) renders per-frame HDR AVIF then muxes **PQ / BT.2020** AV1 into `.mkv` via ffmpeg (no SDR tonemap)
+- Video demo [`python/scenes/beacon_loop.py`](python/scenes/beacon_loop.py) — coastal beacon, water + flame phase + camera orbit, **5 s / 720p / 24 fps** (120 frames) → `outputs/beacon_loop.mkv`
+
+### Changed
+
+- `docker/run.sh` image tag `lumencore-build:cuda13-avif-ffmpeg` also installs **ffmpeg** (AV1 encode)
+
 ## [0.16.0] - 2026-07-18
 
 ### Added
