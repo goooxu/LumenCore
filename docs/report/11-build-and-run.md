@@ -17,13 +17,13 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./scripts/setup_physx.sh   # 若尚未有 PhysX 库
 
 # 配置并编译（CMAKE_CUDA_ARCHITECTURES 按本机 GPU 设定）
-./docker/run.sh 'cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=120 && cmake --build /out -j$(nproc)'
+./docker/run.sh 'cmake -S /work -B /out && cmake --build /out -j$(nproc)'
 
 # 渲染示例
-./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.png 256 1'
-./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.png 96 1'
+./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.avif 256 1'
+./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.avif 256 1'
+./docker/run.sh 'python3 /work/python/scenes/fireplace.py /results/fireplace.avif 256 1'
+./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.avif 96 1'
 ```
 
 `docker/run.sh` 把仓库挂到 `/work`（只读），构建目录与结果在宿主机临时目录（如 `/tmp/LumenCore-build`、`/tmp/LumenCore-out`），避免 NFS 上以 root 写失败。

@@ -1,25 +1,21 @@
 #include "nrtx/nrtx.h"
+#include "nrtx/image_io.h"
 
 #include <cmath>
 #include <stdexcept>
 #include <vector>
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 namespace nrtx {
 
 int Scene::add_texture(const std::string &path) {
-  int w = 0, h = 0, comp = 0;
-  unsigned char *data = stbi_load(path.c_str(), &w, &h, &comp, 4);
-  if (!data || w <= 0 || h <= 0) {
-    throw std::runtime_error("Failed to load texture: " + path);
-  }
+  int w = 0, h = 0;
   Texture2D tex;
+  load_avif_rgba8(path, w, h, tex.rgba);
+  if (w <= 0 || h <= 0 || tex.rgba.empty()) {
+    throw std::runtime_error("Failed to load AVIF texture: " + path);
+  }
   tex.width = w;
   tex.height = h;
-  tex.rgba.assign(data, data + static_cast<size_t>(w) * h * 4);
-  stbi_image_free(data);
   textures.push_back(std::move(tex));
   return static_cast<int>(textures.size() - 1);
 }

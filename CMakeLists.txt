@@ -1,4 +1,34 @@
 cmake_minimum_required(VERSION 3.20)
+
+# CUDA arch must be set before project(LANGUAGES CUDA), otherwise CMake injects a default.
+if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+  execute_process(
+    COMMAND nvidia-smi --query-gpu=compute_cap --format=csv,noheader
+    OUTPUT_VARIABLE _NRTX_COMPUTE_CAP
+    RESULT_VARIABLE _NRTX_SMI_RC
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(NOT _NRTX_SMI_RC EQUAL 0 OR _NRTX_COMPUTE_CAP STREQUAL "")
+    message(FATAL_ERROR
+      "CMAKE_CUDA_ARCHITECTURES not set and nvidia-smi compute_cap detection failed.\n"
+      "Pass -DCMAKE_CUDA_ARCHITECTURES=<NN> (e.g. 89, 90, 100, 120) for your GPU.")
+  endif()
+  string(REGEX REPLACE "\n.*" "" _NRTX_COMPUTE_CAP "${_NRTX_COMPUTE_CAP}")
+  string(STRIP "${_NRTX_COMPUTE_CAP}" _NRTX_COMPUTE_CAP)
+  string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)$" "\\1\\2" _NRTX_CUDA_ARCH
+                       "${_NRTX_COMPUTE_CAP}")
+  if(_NRTX_CUDA_ARCH STREQUAL "${_NRTX_COMPUTE_CAP}")
+    message(FATAL_ERROR
+      "Could not parse compute_cap '${_NRTX_COMPUTE_CAP}'. "
+      "Pass -DCMAKE_CUDA_ARCHITECTURES=<NN> explicitly.")
+  endif()
+  set(CMAKE_CUDA_ARCHITECTURES "${_NRTX_CUDA_ARCH}" CACHE STRING
+      "CUDA architectures (auto-detected from nvidia-smi unless overridden)" FORCE)
+  message(STATUS "Detected CMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} "
+                 "(from nvidia-smi compute_cap=${_NRTX_COMPUTE_CAP})")
+endif()
+
 project(LumenCore LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -6,12 +36,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 120)
-endif()
-
 find_package(CUDAToolkit REQUIRED)
 find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(AVIF REQUIRED IMPORTED_TARGET libavif)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -41,6 +69,7 @@ add_library(nrtx_host
   src/host/physx_world.cpp
   src/host/renderer.cpp
   src/host/env_map.cpp
+  src/host/image_io.cpp
 )
 target_include_directories(nrtx_host
   PUBLIC
@@ -55,6 +84,7 @@ target_compile_definitions(nrtx_host PUBLIC PX_PHYSX_STATIC_LIB)
 target_link_libraries(nrtx_host PUBLIC
   CUDA::cudart
   CUDA::cuda_driver
+  PkgConfig::AVIF
   ${PHYSX_LIB_DIR}/libPhysXExtensions_static_64.a
   ${PHYSX_LIB_DIR}/libPhysX_static_64.a
   ${PHYSX_LIB_DIR}/libPhysXPvdSDK_static_64.a

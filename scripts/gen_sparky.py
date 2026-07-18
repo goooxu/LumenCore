@@ -9,6 +9,24 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+def save_rgba(img, path):
+    """Write AVIF; fall back to temporary PNG + avifenc if Pillow lacks AVIF."""
+    path = Path(path)
+    try:
+        img.save(str(path), "AVIF", quality=90)
+        return
+    except Exception:
+        pass
+    import subprocess, tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp_path = tmp.name
+        img.save(tmp_path, "PNG")
+    try:
+        subprocess.check_call(["avifenc", "-q", "90", tmp_path, str(path)])
+    finally:
+        os.unlink(tmp_path)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "assets" / "models"
 
@@ -451,7 +469,7 @@ def paint_atlas(path, size=1024):
     sx0, sy0, sx1, sy1 = rect(R_SOLID)
     draw.rectangle([sx0, sy0, sx1, sy1], fill=(240, 242, 245, 255))
 
-    img.save(str(path), "PNG")
+    save_rgba(img, path)
 
 
 def _height_to_normal(height, strength=4.0):
@@ -483,7 +501,7 @@ def _height_to_normal(height, strength=4.0):
 
 
 def paint_normal_atlas(path, size=1024):
-    """Procedural height features matching albedo atlas regions → sparky_normal.png."""
+    """Procedural height features matching albedo atlas regions → sparky_normal.avif."""
     height = Image.new("L", (size, size), 128)
     draw = ImageDraw.Draw(height)
 
@@ -575,7 +593,7 @@ def paint_normal_atlas(path, size=1024):
         pass
 
     nmap = _height_to_normal(height, strength=12.0)
-    nmap.save(str(path), "PNG")
+    save_rgba(nmap, path)
 
 
 def write_obj(model, obj_path, mtl_name):
@@ -633,8 +651,8 @@ def main():
     if not (6000 <= tris <= 16000):
         print("WARNING: triangle count {} outside soft target".format(tris))
 
-    albedo = "sparky_albedo.png"
-    normal = "sparky_normal.png"
+    albedo = "sparky_albedo.avif"
+    normal = "sparky_normal.avif"
     paint_atlas(OUT_DIR / albedo, 1024)
     paint_normal_atlas(OUT_DIR / normal, 1024)
     write_mtl(OUT_DIR / "sparky.mtl", albedo)

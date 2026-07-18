@@ -8,7 +8,7 @@ PhysX 不知道「渲染」；OptiX 不知道「冲量」。本项目约定：
 2. 渲染侧为盒/球/吉祥物准备**物体空间原型网格**（各建一个 GAS）。
 3. 每帧用位姿填写 `OptixInstance` 变换，重建 **IAS**，再路径追踪。
 
-![PhysX→渲染循环](figures/physx-render-loop.png)
+![PhysX→渲染循环](figures/physx-render-loop.avif)
 
 图注：step → get_pose → 更新实例变换 → 路径追踪。原型 GAS 复用，不再每帧把全部砖块顶点合并进一个大 GAS。
 
@@ -64,7 +64,7 @@ Python / C++ 场景 API：
 4. 每帧：`get_pose` → `add_instance` → `Renderer.render`（日志可见 `IAS: N prototype GAS, M instances`）。
 5. 首页 hero 默认对应某一帧（如 `frame_0010`）。
 
-![PhysX Collapse](../../outputs/physx_collapse.png)
+![PhysX Collapse](../../outputs/physx_collapse.avif)
 
 图注：玻璃火球撞塌砖塔（hero 帧）。
 

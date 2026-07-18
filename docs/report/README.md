@@ -4,11 +4,11 @@
 
 本报告与仓库源码一一对应；公式先讲直觉，再落到 `src/`、`python/scenes/` 里的具体函数。
 
-**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 含综合展示 `showcase.png`、两封面（`dusk_observatory.png` / `assembly_hall.png`）与 `compare/` 特性 ON/OFF。本报告各章仍链接 `outputs/*.png` 旧单图，便于对照单特性。
+**Gallery 导读**：仓库首页 [README](../../README.md) 的 Gallery 含综合展示 `showcase.avif`、两封面（`dusk_observatory.avif` / `assembly_hall.avif`）与 `compare/` 特性 ON/OFF。本报告各章仍链接 `outputs/*.avif` 旧单图，便于对照单特性。
 
 ## 建议阅读路线
 
-1. 先读 [01 项目总览](01-overview.md)，建立「物理仿真 → 三角网格 → 光线追踪 → PNG」的大图。
+1. 先读 [01 项目总览](01-overview.md)，建立「物理仿真 → 三角网格 → 光线追踪 → HDR AVIF」的大图。
 2. 按 [02](02-rendering-equation.md) → [03](03-monte-carlo-path-tracing.md) → [04](04-materials-bsdf.md) → [05](05-nee-mis-hdri.md) 理解**画面是怎么算出来的**。
 3. 再读 [06](06-volumes-media.md)（水与火焰）、[07](07-optix-implementation.md) / [08](08-host-pipeline.md)（OptiX 与 Host）、[09](09-physx-integration.md)（刚体）。
 4. 最后用 [10](10-python-api-demos.md) 对照演示场景，用 [11](11-build-and-run.md) 自己跑一遍。
@@ -36,16 +36,16 @@
 
 | 场景 | 图 | 主要演示 |
 |------|-----|----------|
-| Atelier（首页综合） | `outputs/gallery/showcase.png` | PhysX 定格 + IAS、火焰、HDRI/NEE、GGX、法线、Spot、Beer-Lambert |
-| 暮潮观测站 | `outputs/gallery/dusk_observatory.png` | 海岸 dusk HDR、多材质光学台、Beer 潮池、火焰信标 |
-| Assembly Hall | `outputs/gallery/assembly_hall.png` | 工厂正午、磨砂透射、吸收烟、PhysX Spot 倾泻、糖果 Sparky |
-| 特性对比 | `outputs/gallery/compare/*_{on,off}.png` | 法线 / NEE / Denoiser / 火焰 / Beer-Lambert ON·OFF |
-| Cornell Box | `outputs/cornell.png` | 面光 NEE、玻璃折射、间接照明 |
-| GGX Studio | `outputs/ggx_studio.png` | GGX 粗糙度 / 金属度、HDRI |
-| Fireplace | `outputs/fireplace.png` | 火焰体积、暗场景、吉祥物材质 |
-| PhysX Collapse | `outputs/physx_collapse.png` | GPU 刚体 + OptiX IAS 实例化 |
-| Water Pool | `outputs/water_pool.png` | Beer-Lambert、水面法线 |
-| Sparky | `outputs/sparky.png` | OBJ / albedo+法线贴图 / 聚光灯 |
+| Atelier（首页综合） | `outputs/gallery/showcase.avif` | PhysX 定格 + IAS、火焰、HDRI/NEE、GGX、法线、Spot、Beer-Lambert |
+| 暮潮观测站 | `outputs/gallery/dusk_observatory.avif` | 海岸 dusk HDR、多材质光学台、Beer 潮池、火焰信标 |
+| Assembly Hall | `outputs/gallery/assembly_hall.avif` | 工厂正午、磨砂透射、吸收烟、PhysX Spot 倾泻、糖果 Sparky |
+| 特性对比 | `outputs/gallery/compare/*_{on,off}.avif` | 法线 / NEE / Denoiser / 火焰 / Beer-Lambert ON·OFF |
+| Cornell Box | `outputs/cornell.avif` | 面光 NEE、玻璃折射、间接照明 |
+| GGX Studio | `outputs/ggx_studio.avif` | GGX 粗糙度 / 金属度、HDRI |
+| Fireplace | `outputs/fireplace.avif` | 火焰体积、暗场景、吉祥物材质 |
+| PhysX Collapse | `outputs/physx_collapse.avif` | GPU 刚体 + OptiX IAS 实例化 |
+| Water Pool | `outputs/water_pool.avif` | Beer-Lambert、水面法线 |
+| Sparky | `outputs/sparky.avif` | OBJ / albedo+法线贴图 / 聚光灯 |
 
 ## 配图说明
 

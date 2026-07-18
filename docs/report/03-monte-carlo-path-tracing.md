@@ -18,7 +18,7 @@
 
 ## 一条路径长什么样？
 
-![路径追踪示意](figures/path-tracing.png)
+![路径追踪示意](figures/path-tracing.avif)
 
 *图：从相机出发，撞到表面，再弹到光源。每段都贡献一部分颜色。*
 

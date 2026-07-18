@@ -160,7 +160,7 @@ def sparky_materials(
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/assembly_hall.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/assembly_hall.avif"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 192
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
     sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 48
@@ -334,9 +334,9 @@ def main() -> int:
     )
 
     # Textures / characters
-    albedo = scene.add_texture(resolve_asset("assets/models/sparky_albedo.png"))
-    nmap = scene.add_texture(resolve_asset("assets/models/sparky_normal.png"))
-    spot_tex = scene.add_texture(resolve_asset("assets/models/spot_texture.png"))
+    albedo = scene.add_texture(resolve_asset("assets/models/sparky_albedo.avif"))
+    nmap = scene.add_texture(resolve_asset("assets/models/sparky_normal.avif"))
+    spot_tex = scene.add_texture(resolve_asset("assets/models/spot_texture.avif"))
 
     candy_colors = [
         ((0.95, 0.35, 0.45), (0.95, 0.55, 0.15)),

@@ -10,8 +10,7 @@ flowchart LR
   accel --> loop[循环optixLaunch]
   loop --> accum[累加缓冲]
   accum --> denoise[可选Denoiser]
-  denoise --> tonemap[ACES加gamma]
-  tonemap --> png[写PNG]
+  denoise --> avif[PQ编码写HDR_AVIF]
 ```
 
 *图：Host 侧从上传到出图。*
@@ -41,9 +40,9 @@ flowchart LR
 `optixDenoiserCreate`（HDR 模型）→ `Setup` → `Invoke`。  
 输入：嘈杂的 HDR 累加；输出：平滑很多的 HDR 图。
 
-### 6. 色调映射与 PNG
+### 6. HDR AVIF 写出
 
-线性 HDR 不能直接当 8-bit 图。本项目用 **ACES** 近似后接 gamma，再经 `stb_image_write` 写 PNG。
+去噪后的线性 HDR `float4` 经曝光缩放后编为 **10-bit PQ / BT.2020 AVIF**（libavif），不再做 ACES→8-bit PNG。纹理输入同样为 AVIF（8-bit RGBA 解码）。
 
 ## 相机模型
 
@@ -56,8 +55,8 @@ flowchart LR
 
 ## 小结
 
-- Host：资源上传、GAS、launch 循环、去噪、 tonemap。
+- Host：资源上传、GAS、launch 循环、去噪、HDR AVIF 编码。
 - Device：路径积分本身。
-- 输出默认是去噪后的展示向 PNG。
+- 输出默认是去噪后的 **HDR AVIF**。
 
 下一章：[09 PhysX 集成](09-physx-integration.md)。

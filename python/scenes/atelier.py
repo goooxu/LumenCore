@@ -49,7 +49,7 @@ def _local_box(half: tuple[float, float, float], mat_id: int) -> lc.Mesh:
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/showcase.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "outputs/gallery/showcase.avif"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 192
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
     sim_steps = int(sys.argv[4]) if len(sys.argv) > 4 else 240
@@ -214,9 +214,9 @@ def main() -> int:
     scene.add_mesh(lc.make_uv_sphere((1.78, -0.02, 1.25), 0.12, rock, 24, 16))
 
     # Characters ----------------------------------------------------------------
-    albedo = scene.add_texture(resolve_asset("assets/models/sparky_albedo.png"))
-    nmap = scene.add_texture(resolve_asset("assets/models/sparky_normal.png"))
-    spot_tex = scene.add_texture(resolve_asset("assets/models/spot_texture.png"))
+    albedo = scene.add_texture(resolve_asset("assets/models/sparky_albedo.avif"))
+    nmap = scene.add_texture(resolve_asset("assets/models/sparky_normal.avif"))
+    spot_tex = scene.add_texture(resolve_asset("assets/models/spot_texture.avif"))
 
     glass_h = scene.add_material(
         lc.Material(base_color=(0.65, 0.85, 1.0), roughness=0.02, transmission=0.92, ior=1.45)
