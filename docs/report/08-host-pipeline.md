@@ -42,7 +42,7 @@ flowchart LR
 
 ### 6. HDR AVIF 写出
 
-去噪后的线性 HDR `float4` 经曝光缩放后编为 **10-bit PQ / BT.2020 AVIF**（libavif），不再做 ACES→8-bit PNG。纹理输入同样为 AVIF（8-bit RGBA 解码）。
+去噪后的线性 HDR `float4` 经曝光缩放后编为 **10-bit PQ / BT.2020 AVIF**（libavif）。材质纹理输入为 AVIF（8-bit RGBA 解码）；环境光仍为 Radiance `.hdr` 浮点。
 
 ## 相机模型
 

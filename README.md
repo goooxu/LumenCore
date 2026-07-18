@@ -88,8 +88,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 - Procedural water surfaces (`make_water_surface` with analytic normals)
 - Optional mesh **vertex normals** / auto **tangents** (`ensure_mesh_tangents`) for smooth shading and normal maps
 - Progressive accumulation + OptiX Denoiser (albedo/normal guided)
-- **HDR AVIF** output (PQ / BT.2020 from linear float buffer) + **AVIF** texture inputs
-- ACES is no longer applied on disk write (HDR still preserved in AVIF)
+- **HDR AVIF** output (10-bit PQ / BT.2020 from linear float buffer) + **AVIF** texture inputs (8-bit RGBA decode)
 
 ## Requirements
 

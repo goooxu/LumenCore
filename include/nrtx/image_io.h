@@ -17,8 +17,4 @@ void load_avif_rgba8(const std::string &path, int &width, int &height,
 void write_avif_hdr_pq(const std::string &path, int width, int height, const float *rgb,
                        float nits_scale = 100.0f);
 
-/** Write LDR AVIF (8-bit) from tightly packed RGBA8, top-left origin. */
-void write_avif_rgba8(const std::string &path, int width, int height,
-                      const unsigned char *rgba);
-
 } // namespace nrtx
