@@ -39,7 +39,7 @@ f_{\mathrm{diff}}=\frac{C}{\pi}.
 
 真实金属/塑料高光不是完美镜面。微表面模型认为：宏观表面由许多微小镜面「小面」组成，法线分布由粗糙度控制。
 
-![微表面粗糙度](figures/microfacet-roughness.png)
+![微表面粗糙度](figures/microfacet-roughness.avif)
 
 *图：左光滑、右粗糙。粗糙时反射方向更分散，高光更糊。*
 
@@ -65,7 +65,7 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 `sample_ggx_vndf` 按可见法线分布抽微表面法线 $h$，再关于 $h$ 反射得到 $`\omega_i`$。  
 漫反射与镜面用随机选择混合，pdf 在 `eval_opaque_bsdf` 里一并估算，供 MIS 使用。
 
-![GGX Studio](../../outputs/ggx_studio.png)
+![GGX Studio](../../outputs/ggx_studio.avif)
 
 *图：后排金属球粗糙度递增；前排金属度递增。对应 `python/scenes/ggx_studio.py`。*
 
@@ -80,7 +80,7 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 
 粗糙度低 → 接近清晰玻璃；粗糙度高 → 磨砂/雾化折射。
 
-![Fresnel 反射/折射](figures/fresnel-refract.png)
+![Fresnel 反射/折射](figures/fresnel-refract.avif)
 
 图注：空气→玻璃界面上，入射光分成反射与折射。掠射角时反射更强（Fresnel）。粗糙时这些方向绕微法线散开。
 
@@ -94,9 +94,9 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 2. closesthit 插值 $T$、$N$，算 $B = N\times T\cdot w$，把贴图中的切线空间法线变到物体空间，再 `optixTransformNormal...` 到世界空间。
 3. **着色 / NEE / BSDF** 用扰动后的 shading normal；**正反面判定**仍用几何面法线。
 
-Sparky 的 `sparky_normal.png` 与 albedo 共用 UV 图集（面板线、屏框、胸口浮雕等）。演示：`sparky` / `fireplace` / `physx_collapse`。
+Sparky 的 `sparky_normal.avif` 与 albedo 共用 UV 图集（面板线、屏框、胸口浮雕等）。演示：`sparky` / `fireplace` / `physx_collapse`。
 
-![Sparky](../../outputs/sparky.png)
+![Sparky](../../outputs/sparky.avif)
 
 图注：右侧 Sparky 使用 albedo + 法线贴图。
 

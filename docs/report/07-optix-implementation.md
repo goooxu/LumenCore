@@ -6,7 +6,7 @@
 
 本项目使用 OptiX 9，设备代码在 `src/device/shaders.cu`，编译为 OptiX-IR（`shaders.optixir`），由 `renderer.cpp` 加载。
 
-![OptiX 结构示意](figures/optix-architecture.png)
+![OptiX 结构示意](figures/optix-architecture.avif)
 
 图注：Context 管理 Module 与 Pipeline；GAS 存三角形加速结构；IAS 用实例变换引用多个 GAS；SBT 把射线类型绑到具体程序。
 

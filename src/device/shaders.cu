@@ -171,7 +171,7 @@ __forceinline__ __device__ float3 sample_albedo_tex(const nrtx::TextureGPU &tex,
   if (v < 0.0f) {
     v += 1.0f;
   }
-  // OBJ/PNG often use top-left V; our atlas is authored bottom-up friendly — sample as-is.
+  // OBJ/AVIF textures often use top-left V; our atlas is authored bottom-up friendly — sample as-is.
   const float x = u * static_cast<float>(tex.width) - 0.5f;
   const float y = (1.0f - v) * static_cast<float>(tex.height) - 0.5f;
   const int x0 = static_cast<int>(floorf(x));

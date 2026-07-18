@@ -5,6 +5,24 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-07-18
+
+### Added
+
+- **HDR AVIF** render output (10-bit PQ / BT.2020) from linear float buffers via libavif
+- **AVIF** texture inputs (`Scene.add_texture`); albedo/normal assets shipped as `.avif`
+- CMake auto-detects `CMAKE_CUDA_ARCHITECTURES` from `nvidia-smi compute_cap` (fail-closed if missing)
+
+### Changed
+
+- Removed ACES/γ 8-bit PNG write path; gallery/docs/scripts default to `.avif`
+- `docker/run.sh` image tag `lumencore-build:cuda13-avif` installs `libavif-dev`; prefers host-matching multiarch lib dir; preloads `libcudart` in-container for PhysXGpu
+- `scripts/render_gallery.sh` no longer falls back to CUDA arch 120
+
+### Removed
+
+- All project PNG render outputs and texture/diagram PNGs (PNG fully deprecated)
+
 ## [0.15.0] - 2026-07-17
 
 ### Added

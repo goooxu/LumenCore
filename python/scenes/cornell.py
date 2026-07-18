@@ -8,7 +8,7 @@ import lumencore as lc
 
 
 def main() -> int:
-    out = sys.argv[1] if len(sys.argv) > 1 else "cornell.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "cornell.avif"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 256
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 

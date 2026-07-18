@@ -29,13 +29,13 @@ def resolve_asset(relative):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "sparky.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "sparky.avif"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 256
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 
     scene = lc.Scene()
-    albedo_path = resolve_asset("assets/models/sparky_albedo.png")
-    normal_path = resolve_asset("assets/models/sparky_normal.png")
+    albedo_path = resolve_asset("assets/models/sparky_albedo.avif")
+    normal_path = resolve_asset("assets/models/sparky_normal.avif")
     tex = scene.add_texture(albedo_path)
     nmap = scene.add_texture(normal_path)
 

@@ -15,8 +15,14 @@ mkdir -p "${BUILD_DIR}" "${OUT_DIR}"
 # Portable CMake (CUDA devel images often lack apt write access as non-root)
 HOST_ARCH="$(uname -m)"
 case "${HOST_ARCH}" in
-  aarch64|arm64) CMAKE_ARCH=aarch64 ;;
-  *) CMAKE_ARCH=x86_64 ;;
+  aarch64|arm64)
+    CMAKE_ARCH=aarch64
+    PREFERRED_LIB=/usr/lib/aarch64-linux-gnu
+    ;;
+  *)
+    CMAKE_ARCH=x86_64
+    PREFERRED_LIB=/usr/lib/x86_64-linux-gnu
+    ;;
 esac
 if [[ ! -x "${CMAKE_DIR}/bin/cmake" ]] || ! "${CMAKE_DIR}/bin/cmake" --version >/dev/null 2>&1; then
   echo "Downloading portable CMake (${CMAKE_ARCH}) into ${CMAKE_DIR} ..."
@@ -27,20 +33,27 @@ if [[ ! -x "${CMAKE_DIR}/bin/cmake" ]] || ! "${CMAKE_DIR}/bin/cmake" --version >
   tar -xzf /tmp/cmake-linux.tgz -C "${CMAKE_DIR}" --strip-components=1
 fi
 
-# Ensure a CUDA image with Python headers exists for pybind11 builds.
+# CUDA image + Python headers + libavif (HDR AVIF I/O).
+BUILD_IMAGE_TAG="lumencore-build:cuda13-avif"
 if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
-  if ! docker image inspect lumencore-build:cuda13 >/dev/null 2>&1; then
-    echo "Building lumencore-build:cuda13 (adds python3-dev) ..."
+  if ! docker image inspect "${BUILD_IMAGE_TAG}" >/dev/null 2>&1; then
+    echo "Building ${BUILD_IMAGE_TAG} (python3-dev + libavif) ..."
     docker run --name lumencore-pysetup "${IMAGE}" bash -lc \
-      "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-dev git"
-    docker commit lumencore-pysetup lumencore-build:cuda13
+      "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        python3 python3-dev git pkg-config \
+        libavif-dev libaom-dev libavif-bin"
+    docker commit lumencore-pysetup "${BUILD_IMAGE_TAG}"
     docker rm lumencore-pysetup
   fi
-  IMAGE="lumencore-build:cuda13"
+  IMAGE="${BUILD_IMAGE_TAG}"
 fi
 
-# Host multiarch lib dirs (x86_64 and aarch64).
-LIB_DIRS=(/usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu)
+# Prefer host-matching multiarch lib dir, then the other.
+LIB_DIRS=("${PREFERRED_LIB}")
+case "${HOST_ARCH}" in
+  aarch64|arm64) LIB_DIRS+=(/usr/lib/x86_64-linux-gnu) ;;
+  *) LIB_DIRS+=(/usr/lib/aarch64-linux-gnu) ;;
+esac
 HOST_LIB_DIR=""
 for d in "${LIB_DIRS[@]}"; do
   if [[ -d "${d}" ]]; then
@@ -53,7 +66,7 @@ if [[ -z "${HOST_LIB_DIR}" ]]; then
   exit 1
 fi
 
-# PhysX GPU .so: prefer NRTX_PHYSX_ROOT (machine-local aarch64 builds), else repo vendored.
+# PhysX GPU .so: prefer NRTX_PHYSX_ROOT (machine-local host-arch builds), else repo vendored.
 if [[ -n "${NRTX_PHYSX_ROOT:-}" ]]; then
   PHYSX_ROOT_HOST="${NRTX_PHYSX_ROOT}"
 else
@@ -68,6 +81,8 @@ else
 fi
 LD_EXTRA="${PHYSX_BIN_IN_CT}:${HOST_LIB_DIR}"
 
+# PhysXGpu needs libcudart symbols; resolve preload path inside the container (not on host).
+CONTAINER_LD_PRELOAD_CMD='for f in /usr/local/cuda/lib64/libcudart.so.13 /usr/local/cuda/lib64/libcudart.so /usr/local/cuda/targets/*/lib/libcudart.so.13 /usr/local/cuda/targets/*/lib/libcudart.so; do if [ -f "$f" ]; then export LD_PRELOAD="$f${LD_PRELOAD:+:$LD_PRELOAD}"; break; fi; done; '
 # NFS scratch is often not writable as root inside Docker; build/output stay on local disk.
 # Mount driver OptiX/RTX libraries — stock CUDA images do not ship them.
 # Do NOT bind-mount libnvoptix.so.1: nvidia-container-toolkit already injects it
@@ -94,7 +109,6 @@ for d in "${LIB_DIRS[@]}"; do
 done
 OPTIX_MOUNT_ARGS=()
 if [[ -n "${NVOPTIX_VER}" && -f "${NVOPTIX_VER}" ]]; then
-  # Provide the versioned soname the .so.1 symlink resolves to (toolkit may omit it).
   OPTIX_MOUNT_ARGS+=(-v "${NVOPTIX_VER}:${NVOPTIX_VER}:ro")
 fi
 
@@ -121,4 +135,4 @@ docker run --rm "${GPU_ARGS[@]}" \
   -e PYTHONPATH=/out/python \
   -e HOME=/tmp \
   "${IMAGE}" \
-  bash -lc "${CMD}"
+  bash -lc "${CONTAINER_LD_PRELOAD_CMD}${CMD}"

@@ -21,7 +21,8 @@ if [[ -z "${NRTX_CUDA_ARCH:-}" ]]; then
   if [[ "${CAP}" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
     CUDA_ARCH="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
   else
-    CUDA_ARCH=120
+    echo "error: set NRTX_CUDA_ARCH or ensure nvidia-smi reports compute_cap" >&2
+    exit 1
   fi
 else
   CUDA_ARCH="${NRTX_CUDA_ARCH}"
@@ -70,11 +71,11 @@ next_gpu() {
 }
 
 g=$(next_gpu)
-JOBS+=("${g}|showcase|python3 /work/python/scenes/atelier.py /results/gallery/showcase.png ${SHOWCASE_SPP} 1")
+JOBS+=("${g}|showcase|python3 /work/python/scenes/atelier.py /results/gallery/showcase.avif ${SHOWCASE_SPP} 1")
 g=$(next_gpu)
-JOBS+=("${g}|dusk_observatory|python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.png ${SHOWCASE_SPP} 1")
+JOBS+=("${g}|dusk_observatory|python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.avif ${SHOWCASE_SPP} 1")
 g=$(next_gpu)
-JOBS+=("${g}|assembly_hall|python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.png ${SHOWCASE_SPP} 1")
+JOBS+=("${g}|assembly_hall|python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.avif ${SHOWCASE_SPP} 1")
 
 FEATURES=(normal nee denoiser flame beer)
 for feat in "${FEATURES[@]}"; do
@@ -84,7 +85,7 @@ for feat in "${FEATURES[@]}"; do
       spp="${DENOISER_SPP}"
     fi
     g=$(next_gpu)
-    JOBS+=("${g}|${feat}_${mode}|python3 /work/python/scenes/gallery_compare.py --feature ${feat} --mode ${mode} --out /results/gallery/compare/${feat}_${mode}.png --width ${COMPARE_WIDTH} --spp ${spp} --denoise 1")
+    JOBS+=("${g}|${feat}_${mode}|python3 /work/python/scenes/gallery_compare.py --feature ${feat} --mode ${mode} --out /results/gallery/compare/${feat}_${mode}.avif --width ${COMPARE_WIDTH} --spp ${spp} --denoise 1")
   done
 done
 
@@ -136,11 +137,11 @@ fi
 
 # --- Copy into repo outputs/ --------------------------------------------------
 echo "[render_gallery] copying into ${REPO_GALLERY}"
-cp -f "${HOST_OUT}/gallery/showcase.png" "${REPO_GALLERY}/showcase.png"
-cp -f "${HOST_OUT}/gallery/dusk_observatory.png" "${REPO_GALLERY}/dusk_observatory.png"
-cp -f "${HOST_OUT}/gallery/assembly_hall.png" "${REPO_GALLERY}/assembly_hall.png"
-cp -f "${HOST_OUT}/gallery/compare/"*.png "${REPO_GALLERY}/compare/"
+cp -f "${HOST_OUT}/gallery/showcase.avif" "${REPO_GALLERY}/showcase.avif"
+cp -f "${HOST_OUT}/gallery/dusk_observatory.avif" "${REPO_GALLERY}/dusk_observatory.avif"
+cp -f "${HOST_OUT}/gallery/assembly_hall.avif" "${REPO_GALLERY}/assembly_hall.avif"
+cp -f "${HOST_OUT}/gallery/compare/"*.avif "${REPO_GALLERY}/compare/"
 
 echo "[render_gallery] done"
-ls -la "${REPO_GALLERY}/showcase.png" "${REPO_GALLERY}/dusk_observatory.png" \
-  "${REPO_GALLERY}/assembly_hall.png" "${REPO_GALLERY}/compare/"
+ls -la "${REPO_GALLERY}/showcase.avif" "${REPO_GALLERY}/dusk_observatory.avif" \
+  "${REPO_GALLERY}/assembly_hall.avif" "${REPO_GALLERY}/compare/"

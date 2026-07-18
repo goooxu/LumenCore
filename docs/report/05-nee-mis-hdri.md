@@ -6,7 +6,7 @@
 
 **下一事件估计（Next Event Estimation, NEE）**：在表面点**显式采样光源**，连一条阴影射线，直接加上灯的贡献。
 
-![NEE 与 MIS](figures/nee-mis.png)
+![NEE 与 MIS](figures/nee-mis.avif)
 
 *图：左边 NEE 直接连灯；右边 BSDF 继续弹；中间用 MIS 按 pdf 加权，避免「算两遍」。*
 
@@ -38,7 +38,7 @@ NEE 时权重为 $`w = p_{\mathrm{light}} / (p_{\mathrm{light}} + p_{\mathrm{bsd
 
 环境光常用**等距柱状**（equirectangular）图：一张 2:1 的矩形表示整球方向。
 
-![HDRI 等距柱状](figures/hdri-equirect.png)
+![HDRI 等距柱状](figures/hdri-equirect.avif)
 
 *图：上图是展开的环境；方向 $(\theta,\phi)$ 映射到像素 $(u,v)$。*
 

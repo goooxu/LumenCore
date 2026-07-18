@@ -29,7 +29,7 @@ def resolve_asset(relative):
 
 
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "water_pool.png"
+    out = sys.argv[1] if len(sys.argv) > 1 else "water_pool.avif"
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 256
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
     time = float(sys.argv[4]) if len(sys.argv) > 4 else 1.25
@@ -53,8 +53,8 @@ def main():
     accent = scene.add_material(lc.Material(base_color=(0.95, 0.35, 0.12), roughness=0.35))
     accent_b = scene.add_material(lc.Material(base_color=(0.15, 0.55, 0.85), roughness=0.4))
 
-    albedo_path = resolve_asset("assets/models/sparky_albedo.png")
-    normal_path = resolve_asset("assets/models/sparky_normal.png")
+    albedo_path = resolve_asset("assets/models/sparky_albedo.avif")
+    normal_path = resolve_asset("assets/models/sparky_normal.avif")
     tex = scene.add_texture(albedo_path)
     nmap = scene.add_texture(normal_path)
 

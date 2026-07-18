@@ -1,4 +1,5 @@
 #include "nrtx/nrtx.h"
+#include "nrtx/image_io.h"
 
 #include "LaunchParams.h"
 #include "vec.h"
@@ -20,9 +21,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 namespace nrtx {
 namespace {
@@ -90,18 +88,6 @@ template <typename T> struct CudaBuffer {
 
   ~CudaBuffer() { free(); }
 };
-
-float3 aces_tonemap(const float3 &x) {
-  const float a = 2.51f;
-  const float b = 0.03f;
-  const float c = 2.43f;
-  const float d = 0.59f;
-  const float e = 0.14f;
-  auto tone = [&](float v) {
-    return clamp((v * (a * v + b)) / (v * (c * v + d) + e), 0.0f, 1.0f);
-  };
-  return make_float3(tone(x.x), tone(x.y), tone(x.z));
-}
 
 CameraGPU make_camera_gpu(const Camera &cam) {
   float3 w = normalize(cam.lookat - cam.eye);
@@ -881,26 +867,20 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   CUDA_CHECK(cudaMemcpy(host.data(), final_device, pixel_count * sizeof(float4),
                         cudaMemcpyDeviceToHost));
 
-  std::vector<unsigned char> rgba(pixel_count * 4);
+  // HDR AVIF: linear scene-referred RGB, Y-flipped to top-left origin (PQ encode in image_io).
+  std::vector<float> rgb(static_cast<size_t>(pixel_count) * 3);
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
       const size_t dst = static_cast<size_t>(y) * width + x;
       const size_t src = static_cast<size_t>(height - 1 - y) * width + x;
-      float3 c = make_float3(host[src].x, host[src].y, host[src].z);
-      c = aces_tonemap(c);
-      c = make_float3(std::pow(c.x, 1.0f / 2.2f), std::pow(c.y, 1.0f / 2.2f),
-                      std::pow(c.z, 1.0f / 2.2f));
-      rgba[dst * 4 + 0] = static_cast<unsigned char>(clamp(c.x, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 1] = static_cast<unsigned char>(clamp(c.y, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 2] = static_cast<unsigned char>(clamp(c.z, 0.0f, 1.0f) * 255.0f + 0.5f);
-      rgba[dst * 4 + 3] = 255;
+      rgb[dst * 3 + 0] = host[src].x;
+      rgb[dst * 3 + 1] = host[src].y;
+      rgb[dst * 3 + 2] = host[src].z;
     }
   }
 
-  if (!stbi_write_png(config.output_path.c_str(), width, height, 4, rgba.data(), width * 4)) {
-    throw std::runtime_error("Failed to write PNG: " + config.output_path);
-  }
-  std::cout << "Wrote " << config.output_path << "\n";
+  write_avif_hdr_pq(config.output_path, width, height, rgb.data(), 100.0f);
+  std::cout << "Wrote " << config.output_path << " (HDR AVIF PQ)\n";
 }
 
 } // namespace nrtx

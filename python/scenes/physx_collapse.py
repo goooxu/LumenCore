@@ -68,8 +68,8 @@ def _scale_mascot_to_brick(mesh: lc.Mesh, model_height: float, model_ymin: float
 
 def _register_mascot_materials(scene: lc.Scene) -> tuple[dict[str, int], dict[str, int], int, int]:
     """Register Sparky / Capsule materials in a fixed order (IDs must match cached meshes)."""
-    albedo_path = resolve_asset("assets/models/sparky_albedo.png")
-    normal_path = resolve_asset("assets/models/sparky_normal.png")
+    albedo_path = resolve_asset("assets/models/sparky_albedo.avif")
+    normal_path = resolve_asset("assets/models/sparky_normal.avif")
     tex = scene.add_texture(albedo_path)
     nmap = scene.add_texture(normal_path)
 
@@ -293,12 +293,12 @@ def main() -> int:
     spp = int(sys.argv[2]) if len(sys.argv) > 2 else 128
     denoise = (int(sys.argv[3]) != 0) if len(sys.argv) > 3 else True
 
-    if out_arg.suffix.lower() == ".png":
+    if out_arg.suffix.lower() == ".avif":
         hero_path = out_arg
         frames_dir = out_arg.parent / out_arg.stem
     else:
         frames_dir = out_arg
-        hero_path = out_arg.parent / f"{out_arg.name}.png"
+        hero_path = out_arg.parent / f"{out_arg.name}.avif"
     frames_dir.mkdir(parents=True, exist_ok=True)
     hero_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -406,22 +406,22 @@ def main() -> int:
         if step_i % frame_every == 0:
             flame_time = 1.2 + step_i * 0.035
             scene = build_render_scene(world, actors, brick_half, flame_time=flame_time)
-            out_png = frames_dir / f"frame_{frame_idx:04d}.png"
+            out_avif = frames_dir / f"frame_{frame_idx:04d}.avif"
             cfg = lc.RenderConfig(
                 width=2560,
                 height=1440,
                 spp=spp,
                 denoise=denoise,
-                output_path=str(out_png),
+                output_path=str(out_avif),
             )
             print(
-                f"[physx_collapse] render frame {frame_idx} @ sim step {step_i} → {out_png}",
+                f"[physx_collapse] render frame {frame_idx} @ sim step {step_i} → {out_avif}",
                 flush=True,
             )
             renderer.render(scene, camera, cfg)
-            frame_paths.append(out_png)
+            frame_paths.append(out_avif)
             if step_i == hero_step:
-                shutil.copyfile(out_png, hero_path)
+                shutil.copyfile(out_avif, hero_path)
                 print(f"[physx_collapse] hero image → {hero_path}", flush=True)
             frame_idx += 1
 
@@ -431,7 +431,7 @@ def main() -> int:
         step_i += 1
 
     # Optional contact sheet (Pillow may be missing in the CUDA build image).
-    sheet_path = frames_dir / "contact_sheet.png"
+    sheet_path = frames_dir / "contact_sheet.avif"
     try:
         from PIL import Image  # type: ignore
 
@@ -442,7 +442,7 @@ def main() -> int:
             sheet = Image.new("RGB", (w * len(imgs), h))
             for i, im in enumerate(imgs):
                 sheet.paste(im, (i * w, 0))
-            sheet.save(sheet_path)
+            sheet.save(str(sheet_path), "AVIF")
             print(f"[physx_collapse] contact sheet → {sheet_path}", flush=True)
     except Exception as exc:  # noqa: BLE001
         print(f"[physx_collapse] contact sheet skipped ({exc})", flush=True)

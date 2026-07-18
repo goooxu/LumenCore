@@ -13,11 +13,11 @@ L(d)=L(0)\,e^{-\sigma_t d},
 实现：路径进入玻璃时设置 `prd->medium_sigma`；下一次命中前用 `beer_attenuate` 乘到吞吐上。  
 水面演示见 `python/scenes/water_pool.py`（IOR 1.33 + 吸收）。
 
-![Beer-Lambert 与体积行进](figures/volume-media.png)
+![Beer-Lambert 与体积行进](figures/volume-media.avif)
 
 *图：左——沿路径颜色变淡（吸收）；右——在 AABB 里逐步采样火焰密度。*
 
-![Water Pool](../../outputs/water_pool.png)
+![Water Pool](../../outputs/water_pool.avif)
 
 *图：开敞深水 + Beer-Lambert，深度越大越偏青。*
 
@@ -40,7 +40,7 @@ L(d)=L(0)\,e^{-\sigma_t d},
 
 密度函数让火焰呈细丝状、底部更亮——这是艺术参数，不是第一性原理燃烧模拟。
 
-![Fireplace](../../outputs/fireplace.png)
+![Fireplace](../../outputs/fireplace.avif)
 
 *图：暗房间几乎全靠火焰体积 + 代理灯照明。*
 
