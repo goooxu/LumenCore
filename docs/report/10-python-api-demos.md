@@ -77,7 +77,7 @@ GPU 刚体 + IAS 实例变换 + 玻璃火球。脚本：`physx_collapse.py`。
 
 ### Beacon Loop — HDR AV1 视频
 
-海岸信标短片：潮池 `time`、火焰体积 `time`、相机缓绕；无 PhysX。逐帧仍为 HDR AVIF，再用 ffmpeg 合成 **PQ / BT.2020 AV1**（`.mkv`）。脚本：`beacon_loop.py` → `outputs/beacon_loop.mkv`（默认 5 s / 720p / 24 fps）。可复用工具：`python/video_render.py`。
+海岸信标短片：潮池 `time`、火焰体积 `time`、相机缓绕；无 PhysX。逐帧仍为 HDR AVIF，再用 ffmpeg 合成 **PQ / BT.2020 AV1**（`.mkv` + 网页内嵌用 `.mp4`）。脚本：`beacon_loop.py` → `outputs/beacon_loop.mkv`（默认 5 s / 720p / 24 fps）；首页 Gallery 展示该视频。可复用工具：`python/video_render.py`。
 
 ### Water Pool — 介质
 

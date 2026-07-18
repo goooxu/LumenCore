@@ -26,6 +26,14 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 玩具工厂总装大厅：正午 HDR 天窗涌入；熔炉开口火苗锐利，磨砂玻璃隔间里一团炉火只显暖晕；零发射体积做黑烟柱，地面暗斑近似体积影。传送带上糖果色塑料 Sparky 列队（GGX 双瓣近似涂层），质检唤醒的那只亮起纹理屏并配 NEE 面光；黄色 Capsule 立在光斑中督工，PhysX 把一箱玩具 Spot 定格在倾泻半空；水冷池多频波纹与 Beer–Lambert 倒映全场，金属桁架与程序化镂空齿轮标志收尾。脚本：`python/scenes/assembly_hall.py`（2560×1440）。
 
+### 视频 · Beacon Loop
+
+<video src="outputs/beacon_loop.mp4" controls playsinline width="720"></video>
+
+![Beacon Loop still](outputs/gallery/beacon_loop.avif)
+
+海岸信标短片：潮池波纹相位、火焰体积滚动、相机缓绕平台；无 PhysX。逐帧仍为 HDR AVIF，再合成 **PQ / BT.2020 AV1**（仓库同时提供 [`.mkv`](outputs/beacon_loop.mkv) 与便于网页内嵌的 [`.mp4`](outputs/beacon_loop.mp4)）。脚本：`python/scenes/beacon_loop.py`（默认 **5 s / 1280×720 / 24 fps**）。
+
 ### 特性对比（同机位 ON / OFF）
 
 每组两张 **1024×1024**，只翻转一个开关。批量入口：`python/scenes/gallery_compare.py`；并行脚本：`scripts/render_gallery.sh`。
@@ -136,7 +144,7 @@ CLI: `python3 <scene.py> [out.avif] [spp] [denoise=1|0]`
 
 `physx_collapse` writes a frame sequence under `<out_stem>/` plus a gallery hero AVIF (pick any frame for the homepage).
 
-`beacon_loop` writes `frame_XXXX.avif` under `<out_stem>/` then muxes **HDR AV1** (PQ / BT.2020) into `.mkv` via ffmpeg. Extra args: `[frames] [fps]` (defaults 120 / 24).
+`beacon_loop` writes `frame_XXXX.avif` under `<out_stem>/` then muxes **HDR AV1** (PQ / BT.2020) into `.mkv` and a same-stream `.mp4` (README Gallery embed) via ffmpeg. Extra args: `[frames] [fps]` (defaults 120 / 24).
 
 `fireplace` extra arg: `[time]` — flame noise phase / scroll offset.
 
@@ -179,7 +187,8 @@ lc.Renderer().render(scene, cam, cfg)
 | `assets/models` | Character OBJ / MTL / textures |
 | `assets/env` | HDRI environment maps |
 | `outputs/` | Legacy per-scene stills (report chapters) |
-| `outputs/gallery/` | Homepage gallery (`showcase.avif` + covers + `compare/`) |
+| `outputs/gallery/` | Homepage gallery (`showcase.avif` + covers + `beacon_loop` still + `compare/`) |
+| `outputs/beacon_loop.mkv` / `.mp4` | HDR AV1 video demo (Gallery) |
 
 ## Performance (denoised)
 

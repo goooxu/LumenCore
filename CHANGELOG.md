@@ -9,8 +9,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
-- **HDR AV1 video** path: [`python/video_render.py`](python/video_render.py) renders per-frame HDR AVIF then muxes **PQ / BT.2020** AV1 into `.mkv` via ffmpeg (no SDR tonemap)
-- Video demo [`python/scenes/beacon_loop.py`](python/scenes/beacon_loop.py) — coastal beacon, water + flame phase + camera orbit, **5 s / 720p / 24 fps** (120 frames) → `outputs/beacon_loop.mkv`
+- **HDR AV1 video** path: [`python/video_render.py`](python/video_render.py) renders per-frame HDR AVIF then muxes **PQ / BT.2020** AV1 into `.mkv` / `.mp4` via ffmpeg (no SDR tonemap)
+- Video demo [`python/scenes/beacon_loop.py`](python/scenes/beacon_loop.py) — coastal beacon, water + flame phase + camera orbit, **5 s / 720p / 24 fps** (120 frames); README Gallery embeds `outputs/beacon_loop.mp4`
 
 ### Changed
 

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import math
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -246,6 +248,28 @@ def main() -> int:
     )
     render_frames(render_one, frames_dir, frame_count)
     encode_hdr_av1(frames_dir, out_video, fps=fps)
+    # Same AV1 bitstream in MP4 for README / browser Gallery embeds.
+    out_mp4 = out_video.with_suffix(".mp4")
+    if out_video.resolve() != out_mp4.resolve():
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise RuntimeError("ffmpeg not found; cannot remux MP4 for Gallery embed")
+        subprocess.run(
+            [
+                ffmpeg,
+                "-y",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-i",
+                str(out_video),
+                "-c",
+                "copy",
+                str(out_mp4),
+            ],
+            check=True,
+        )
+        print(f"[beacon_loop] also → {out_mp4}", flush=True)
     print(f"[beacon_loop] done → {out_video}", flush=True)
     return 0
 
