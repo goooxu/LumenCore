@@ -155,7 +155,7 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     metal = scene.add_material(lc.Material(base_color=(0.92, 0.88, 0.80), metallic=1.0, roughness=0.08))
     diffuse = scene.add_material(lc.Material(base_color=(0.55, 0.52, 0.48), roughness=0.7))
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(28.0, 26.0, 22.0))
+        lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9, emission=(28.0, 26.0, 22.0))
     )
 
     # Small dark box (unit-ish room)
@@ -165,9 +165,9 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     scene.add_mesh(lc.make_quad((0, 0, 0), (0, 0, 1), (0, 1, 0), red))
     scene.add_mesh(lc.make_quad((1, 0, 0), (0, 0, 1), (0, 1, 0), green))
 
-    light_corner = (0.38, 0.998, 0.38)
-    light_u = (0.24, 0, 0)
-    light_v = (0, 0, 0.24)
+    light_corner = (0.28, 0.97, 0.28)
+    light_u = (0.44, 0, 0)
+    light_v = (0, 0, 0.44)
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
     if on:
         scene.add_quad_light(light_corner, light_u, light_v, (28.0, 26.0, 22.0), use_mis=True)
@@ -178,10 +178,11 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     scene.background_top = (0, 0, 0)
     scene.background_bottom = (0, 0, 0)
 
+    # Look slightly up so the ceiling lamp stays fully in frame (honest NEE compare).
     camera = lc.Camera(
-        eye=(0.5, 0.48, -1.15),
-        lookat=(0.5, 0.42, 0.5),
-        fov_y_deg=38.0,
+        eye=(0.5, 0.52, -1.20),
+        lookat=(0.5, 0.62, 0.45),
+        fov_y_deg=40.0,
         aspect=1.0,
     )
     cfg = lc.RenderConfig(

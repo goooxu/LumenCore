@@ -17,7 +17,7 @@ def main() -> int:
     red = scene.add_material(lc.Material(base_color=(0.65, 0.05, 0.05), roughness=0.8))
     green = scene.add_material(lc.Material(base_color=(0.12, 0.45, 0.15), roughness=0.8))
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(15, 15, 12))
+        lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9, emission=(15, 15, 12))
     )
     glass = scene.add_material(lc.Material(base_color=(1, 1, 1), roughness=0.0, transmission=1.0, ior=1.5))
     metal = scene.add_material(lc.Material(base_color=(0.95, 0.85, 0.55), metallic=1.0, roughness=0.05))

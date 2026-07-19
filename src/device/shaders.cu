@@ -675,20 +675,35 @@ extern "C" __global__ void __closesthit__radiance() {
     return;
   }
 
+  const bool is_emissive = nrtx::luminance(mat.emission) > 1e-6f;
+
   if (prd->first_hit) {
-    prd->albedo_aov = base;
+    // Denoiser albedo guide: pure-black base on lights makes HDR denoiser eat emission.
+    // Beauty still uses emission only; this does not change the path estimator.
+    if (is_emissive) {
+      prd->albedo_aov =
+          base + make_float3(fminf(mat.emission.x, 1.0f), fminf(mat.emission.y, 1.0f),
+                             fminf(mat.emission.z, 1.0f));
+    } else {
+      prd->albedo_aov = base;
+    }
     prd->normal_aov = n;
     prd->first_hit = 0;
   }
 
   prd->radiance += prd->throughput * mat.emission;
 
+  // Area lights / emissive surfaces are path endpoints (standard unbiased treatment).
+  if (is_emissive) {
+    prd->done = 1;
+    return;
+  }
+
   const float3 wo = -ray_dir;
   const bool is_glass = mat.transmission > 0.5f;
-  const bool is_emissive = nrtx::luminance(mat.emission) > 1e-6f;
 
   // Next-event estimation: area/spot lights + HDRI (opaque only)
-  if (params.enable_nee && !is_glass && !is_emissive) {
+  if (params.enable_nee && !is_glass) {
     const int total_lights = params.light_count + params.spot_count;
     if (total_lights > 0) {
       const int light_idx =

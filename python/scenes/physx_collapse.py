@@ -212,7 +212,7 @@ def build_render_scene(
             )
         ),
         "light": scene.add_material(
-            lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(2.2, 2.0, 1.8))
+            lc.Material(base_color=(0.92, 0.90, 0.85), roughness=0.9, emission=(2.2, 2.0, 1.8))
         ),
     }
     brick_cache: dict[tuple[float, float, float], int] = {}

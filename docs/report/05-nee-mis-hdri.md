@@ -41,9 +41,11 @@ w_a=\frac{p_a}{p_a+p_b}.
 | `add_quad_light(..., use_mis=True)` | 能（需同姿态发光网格） | `mis_balance` |
 | `add_spot_light` | 否 | **恒为 1** |
 | HDRI 环境 | 能（miss） | `mis_balance` |
-| 网格 `emission` | 能（命中累加） | 不做 NEE |
+| 网格 `emission` | 能（命中后路径终止） | 不做 NEE |
 
-需要**看得见的灯板**时：发光网格 + `add_quad_light(..., use_mis=True)`（同一 corner/u/v/emission）。不要在 `use_mis=False` 时双注册，否则会双计。纯虚拟 fill / spot 可无灯具网格，金属高光来自 NEE，属预期。
+需要**看得见的灯板**时：发光网格 + `add_quad_light(..., use_mis=True)`（同一 corner/u/v/emission）。灯板材质应把 **反射率**（`base_color`，近白）与 **出射**（`emission`）分开，不要 `base_color=(0,0,0)`。不要在 `use_mis=False` 时双注册。纯虚拟 fill / spot 可无灯具网格，金属高光来自 NEE，属预期。
+
+**自发光命中**：累加 `throughput * emission` 后终止路径（标准灯终点）。Denoiser 的 albedo 引导对自发光用 `base + clamp(emission,0,1)`，**不改 beauty 估计量**，避免纯黑 albedo 把灯像素抹掉。
 
 NEE 时 HDRI 权重为 $`w = p_{\mathrm{env}} / (p_{\mathrm{env}} + p_{\mathrm{bsdf}})`$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权。
 
@@ -72,6 +74,7 @@ NEE 时 HDRI 权重为 $`w = p_{\mathrm{env}} / (p_{\mathrm{env}} + p_{\mathrm{b
 
 - NEE：主动连灯，降方差。
 - 虚拟 quad/spot：默认 NEE 权重为 1；与发光网格配对的面光用 `use_mis=True`；HDRI：MIS。
+- 自发光表面：命中后终止；albedo 引导对灯非零。
 - HDRI：环境当光源，用亮度 CDF 采样。
 - 射线原点沿几何法线偏移，减轻自相交。
 

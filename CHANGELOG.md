@@ -9,9 +9,12 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Fixed
 
-- **Visible area lamps**: `add_quad_light(..., use_mis=True)` when paired with an emissive mesh (gallery NEE ON, cornell, outdoor/materials/water fill, physx_collapse top light) so the fixture is visible without double-counting
-- **GGX VNDF**: Heitz 2018 visible-normal sampling + matching solid-angle PDF; exact Smith G1 (was stretched-space uniform hemisphere with NDF pdf — biased)
-- **Virtual lights**: quad/spot NEE MIS weight is 1 by default (BSDF cannot hit them); HDRI MIS unchanged
+- **Emissive paths**: terminate after adding emission; denoiser albedo guide uses `base+clamp(emission)` so lights are not wiped (beauty estimator unchanged)
+- Visible lamp panels use non-zero `base_color` (reflectance) separate from `emission`
+- Gallery NEE compare framing keeps the ceiling lamp fully in view
+- **Visible area lamps**: `add_quad_light(..., use_mis=True)` when paired with an emissive mesh
+- **GGX VNDF**: Heitz 2018 visible-normal sampling + matching solid-angle PDF; exact Smith G1
+- **Virtual lights**: quad/spot NEE weight is 1 by default; HDRI MIS unchanged
 - **Self-intersection**: geometric-normal `offset_ray_origin` for continuation and shadow rays
 
 ## [0.16.0] - 2026-07-18

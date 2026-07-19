@@ -216,7 +216,7 @@ def main():
     light_u = (3.5, 0.0, 0.5)
     light_v = (-0.4, 0.0, 3.5)
     light_mat = scene.add_material(
-        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(18, 17, 14))
+        lc.Material(base_color=(0.92, 0.90, 0.85), roughness=0.9, emission=(18, 17, 14))
     )
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
     scene.add_quad_light(light_corner, light_u, light_v, (18, 17, 14), use_mis=True)
