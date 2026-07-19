@@ -16,7 +16,9 @@ def main() -> int:
     white = scene.add_material(lc.Material(base_color=(0.73, 0.73, 0.73), roughness=0.8))
     red = scene.add_material(lc.Material(base_color=(0.65, 0.05, 0.05), roughness=0.8))
     green = scene.add_material(lc.Material(base_color=(0.12, 0.45, 0.15), roughness=0.8))
-    light_panel = scene.add_material(lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9))
+    light_mat = scene.add_material(
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(15, 15, 12))
+    )
     glass = scene.add_material(lc.Material(base_color=(1, 1, 1), roughness=0.0, transmission=1.0, ior=1.5))
     metal = scene.add_material(lc.Material(base_color=(0.95, 0.85, 0.55), metallic=1.0, roughness=0.05))
 
@@ -29,9 +31,9 @@ def main() -> int:
     light_corner = (0.35, 0.999, 0.35)
     light_u = (0.3, 0, 0)
     light_v = (0, 0, 0.3)
-    # Visible non-emissive panel + virtual QuadLight only (no mesh emission — avoids double-counting).
-    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_panel))
-    scene.add_quad_light(light_corner, light_u, light_v, (15, 15, 12))
+    # Emissive panel + QuadLight with MIS (visible lamp, no double-count).
+    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
+    scene.add_quad_light(light_corner, light_u, light_v, (15, 15, 12), use_mis=True)
 
     scene.add_mesh(lc.make_box((0.15, 0.0, 0.55), (0.4, 0.4, 0.8), white))
     scene.add_mesh(lc.make_uv_sphere((0.7, 0.2, 0.35), 0.2, glass))

@@ -215,9 +215,11 @@ def main():
     light_corner = (4.0, 8.0, 2.0)
     light_u = (3.5, 0.0, 0.5)
     light_v = (-0.4, 0.0, 3.5)
-    light_panel = scene.add_material(lc.Material(base_color=(0.92, 0.90, 0.85), roughness=0.9))
-    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_panel))
-    scene.add_quad_light(light_corner, light_u, light_v, (18, 17, 14))
+    light_mat = scene.add_material(
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(18, 17, 14))
+    )
+    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
+    scene.add_quad_light(light_corner, light_u, light_v, (18, 17, 14), use_mis=True)
 
     warm = (60.0, 52.0, 42.0)
     scene.add_spot_light(

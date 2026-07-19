@@ -21,7 +21,7 @@
 
 NEE 在 closesthit 中、且材质**不是玻璃、不是自发光**时启用（`enable_nee`）。
 
-对面光 / 聚光：采样灯 → 阴影测试 → `eval_opaque_bsdf` 得 $`f_r`$ → **权重恒为 1**（见下）。对 HDRI：再用平衡 MIS。
+对面光 / 聚光：采样灯 → 阴影测试 → `eval_opaque_bsdf` 得 $`f_r`$ → 按下方规则加权。对 HDRI：再用平衡 MIS。
 
 ## 平衡启发式 MIS
 
@@ -37,11 +37,13 @@ w_a=\frac{p_a}{p_a+p_b}.
 
 | 光源 | BSDF 能否命中？ | NEE 权重 |
 |------|-----------------|----------|
-| `add_quad_light` / `add_spot_light` | 否（无 BVH 几何） | **恒为 1** |
+| `add_quad_light`（默认） | 否（纯虚拟） | **恒为 1** |
+| `add_quad_light(..., use_mis=True)` | 能（需同姿态发光网格） | `mis_balance` |
+| `add_spot_light` | 否 | **恒为 1** |
 | HDRI 环境 | 能（miss） | `mis_balance` |
 | 网格 `emission` | 能（命中累加） | 不做 NEE |
 
-勿把发光网格与同姿态 `add_quad_light` **双注册**，否则在虚拟灯 $w=1$ 下会双计。需要看见灯板时用非发光浅色面板 + QuadLight，或仅用发光网格（关闭该灯的 NEE）。
+需要**看得见的灯板**时：发光网格 + `add_quad_light(..., use_mis=True)`（同一 corner/u/v/emission）。不要在 `use_mis=False` 时双注册，否则会双计。纯虚拟 fill / spot 可无灯具网格，金属高光来自 NEE，属预期。
 
 NEE 时 HDRI 权重为 $`w = p_{\mathrm{env}} / (p_{\mathrm{env}} + p_{\mathrm{bsdf}})`$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权。
 
@@ -69,7 +71,7 @@ NEE 时 HDRI 权重为 $`w = p_{\mathrm{env}} / (p_{\mathrm{env}} + p_{\mathrm{b
 ## 小结
 
 - NEE：主动连灯，降方差。
-- 虚拟 quad/spot：NEE 权重为 1；HDRI：MIS。
+- 虚拟 quad/spot：默认 NEE 权重为 1；与发光网格配对的面光用 `use_mis=True`；HDRI：MIS。
 - HDRI：环境当光源，用亮度 CDF 采样。
 - 射线原点沿几何法线偏移，减轻自相交。
 

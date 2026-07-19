@@ -144,8 +144,8 @@ def render_normal(mode: str, out: str, width: int, spp: int, denoise: bool) -> N
 def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None:
     """Dark room + area light: NEE on vs off (shadow/variance).
 
-    Virtual QuadLight has no BVH geometry, so NEE-off needs an emissive mesh.
-    Never register both for the same light (MIS weight is 1 for virtual lights).
+    OFF: emissive mesh only (BSDF must hit the light).
+    ON: emissive mesh + QuadLight(use_mis=True) so the lamp is visible and NEE is unbiased.
     """
     on = mode == "on"
     scene = lc.Scene()
@@ -154,6 +154,9 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     green = scene.add_material(lc.Material(base_color=(0.10, 0.40, 0.12), roughness=0.85))
     metal = scene.add_material(lc.Material(base_color=(0.92, 0.88, 0.80), metallic=1.0, roughness=0.08))
     diffuse = scene.add_material(lc.Material(base_color=(0.55, 0.52, 0.48), roughness=0.7))
+    light_mat = scene.add_material(
+        lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(28.0, 26.0, 22.0))
+    )
 
     # Small dark box (unit-ish room)
     scene.add_mesh(lc.make_quad((0, 0, 0), (1, 0, 0), (0, 0, 1), white))
@@ -165,16 +168,9 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     light_corner = (0.38, 0.998, 0.38)
     light_u = (0.24, 0, 0)
     light_v = (0, 0, 0.24)
+    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
     if on:
-        # Virtual QuadLight only (+ optional non-emissive panel for silhouette).
-        panel = scene.add_material(lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9))
-        scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, panel))
-        scene.add_quad_light(light_corner, light_u, light_v, (28.0, 26.0, 22.0))
-    else:
-        light_mat = scene.add_material(
-            lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(28.0, 26.0, 22.0))
-        )
-        scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
+        scene.add_quad_light(light_corner, light_u, light_v, (28.0, 26.0, 22.0), use_mis=True)
 
     scene.add_mesh(lc.make_box((0.18, 0.0, 0.55), (0.42, 0.45, 0.82), diffuse))
     scene.add_mesh(lc.make_uv_sphere((0.68, 0.18, 0.38), 0.18, metal, 40, 20))

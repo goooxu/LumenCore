@@ -51,9 +51,9 @@ def main() -> int:
     light_corner = (4.0, 8.0, -2.0)
     light_u = (2.5, 0, 0.5)
     light_v = (0, 0, 2.5)
-    light_panel = scene.add_material(lc.Material(base_color=(0.92, 0.90, 0.85), roughness=0.9))
-    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_panel))
-    scene.add_quad_light(light_corner, light_u, light_v, (12, 11, 9))
+    light_mat = scene.add_material(lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(12, 11, 9)))
+    scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
+    scene.add_quad_light(light_corner, light_u, light_v, (12, 11, 9), use_mis=True)
 
     scene.background_top = (0.08, 0.1, 0.14)
     scene.background_bottom = (0.04, 0.04, 0.05)

@@ -213,10 +213,13 @@ PYBIND11_MODULE(lumencore, m) {
       .def(
           "add_quad_light",
           [](Scene &s, const py::object &corner, const py::object &u, const py::object &v,
-             const py::object &emission) {
-            s.add_quad_light(to_float3(corner), to_float3(u), to_float3(v), to_float3(emission));
+             const py::object &emission, bool use_mis) {
+            s.add_quad_light(to_float3(corner), to_float3(u), to_float3(v), to_float3(emission),
+                             use_mis);
           },
-          py::arg("corner"), py::arg("u"), py::arg("v"), py::arg("emission"))
+          py::arg("corner"), py::arg("u"), py::arg("v"), py::arg("emission"),
+          py::arg("use_mis") = false,
+          "Area light. use_mis=True when paired with an emissive mesh at the same pose.")
       .def(
           "add_spot_light",
           [](Scene &s, const py::object &position, const py::object &direction,

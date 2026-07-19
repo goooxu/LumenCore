@@ -706,13 +706,14 @@ extern "C" __global__ void __closesthit__radiance() {
         const float cos_surf = nrtx::dot(n, to_light);
         if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
           if (!trace_shadow(p, ng_geom, to_light, dist)) {
-            // Virtual quad lights have no BVH geometry — BSDF never hits them; MIS weight = 1.
+            // Virtual-only quads: w=1. Paired with emissive mesh (use_mis): balance MIS.
             const float pdf_light = pdf_area * dist2 / (cos_light * total_lights);
             float pdf_bsdf = 0.0f;
             const float3 f =
                 nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, to_light, pdf_bsdf);
-            (void)pdf_bsdf;
-            prd->radiance += prd->throughput * f * Le * (cos_surf / fmaxf(pdf_light, 1e-8f));
+            const float w =
+                light.use_mis ? nrtx::mis_balance(pdf_light, pdf_bsdf) : 1.0f;
+            prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
           }
         }
       } else {

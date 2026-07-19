@@ -44,7 +44,8 @@ struct QuadLight {
   float3 v;
   float3 emission;
   float inv_area;
-  int pad;
+  /** If non-zero, pair with emissive mesh geometry and use balance MIS; else virtual-only (w=1). */
+  int use_mis;
 };
 
 struct SpotLight {

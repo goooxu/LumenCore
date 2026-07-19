@@ -95,7 +95,7 @@ struct Scene {
   }
 
   void add_quad_light(const float3 &corner, const float3 &u, const float3 &v,
-                      const float3 &emission) {
+                      const float3 &emission, bool use_mis = false) {
     QuadLight light;
     light.corner = corner;
     light.u = u;
@@ -103,7 +103,7 @@ struct Scene {
     light.emission = emission;
     const float area = length(cross(u, v));
     light.inv_area = area > 0.0f ? 1.0f / area : 0.0f;
-    light.pad = 0;
+    light.use_mis = use_mis ? 1 : 0;
     lights.push_back(light);
   }
 
