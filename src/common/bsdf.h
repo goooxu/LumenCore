@@ -23,13 +23,85 @@ __forceinline__ __host__ __device__ float ggx_d(float n_dot_h, float a2) {
   return a2 / (3.14159265f * d * d);
 }
 
+/** Exact GGX Smith G1 (Heitz); matches VNDF PDF. */
 __forceinline__ __host__ __device__ float smith_g1_ggx(float n_dot_x, float a) {
-  const float k = a * 0.5f;
-  return n_dot_x / (n_dot_x * (1.0f - k) + k);
+  const float cos_theta = saturatef(n_dot_x);
+  if (cos_theta < 1e-6f) {
+    return 0.0f;
+  }
+  const float tan2 = (1.0f - cos_theta * cos_theta) / (cos_theta * cos_theta);
+  return 2.0f / (1.0f + sqrtf(1.0f + a * a * tan2));
 }
 
 __forceinline__ __host__ __device__ float smith_g_ggx(float n_dot_v, float n_dot_l, float a) {
   return smith_g1_ggx(n_dot_v, a) * smith_g1_ggx(n_dot_l, a);
+}
+
+/**
+ * Heitz JCGT 2018 GGX VNDF (isotropic αx=αy=a).
+ * Samples microfacet normal h with PDF D_v(h) = G1(v) max(0,v·h) D(h) / (n·v).
+ */
+__forceinline__ __host__ __device__ float3 sample_ggx_vndf(unsigned &seed, const float3 &n,
+                                                          const float3 &wo, float roughness) {
+  const float a = fmaxf(roughness, 0.045f);
+  float3 t, b;
+  orthonormal_basis(n, t, b);
+  // View in local frame (n = +Z).
+  float3 Ve = make_float3(dot(wo, t), dot(wo, b), dot(wo, n));
+  if (Ve.z < 1e-6f) {
+    Ve.z = 1e-6f;
+  }
+  Ve = normalize(Ve);
+
+  // Section 3.2: stretch to hemisphere configuration.
+  float3 Vh = normalize(make_float3(a * Ve.x, a * Ve.y, Ve.z));
+
+  // Section 4.1: orthonormal basis around Vh.
+  const float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+  const float3 T1 = lensq > 0.0f
+                        ? make_float3(-Vh.y, Vh.x, 0.0f) * (1.0f / sqrtf(lensq))
+                        : make_float3(1.0f, 0.0f, 0.0f);
+  const float3 T2 = cross(Vh, T1);
+
+  // Section 4.2: sample projected area (unit disk + warp).
+  const float U1 = rnd(seed);
+  const float U2 = rnd(seed);
+  const float r = sqrtf(U1);
+  const float phi = 2.0f * 3.14159265f * U2;
+  float t1 = r * cosf(phi);
+  float t2 = r * sinf(phi);
+  const float s = 0.5f * (1.0f + Vh.z);
+  t2 = (1.0f - s) * sqrtf(fmaxf(0.0f, 1.0f - t1 * t1)) + s * t2;
+
+  // Section 4.3: reproject onto hemisphere.
+  const float3 Nh =
+      T1 * t1 + T2 * t2 + Vh * sqrtf(fmaxf(0.0f, 1.0f - t1 * t1 - t2 * t2));
+
+  // Section 3.4: unstretch back to ellipsoid.
+  const float3 Ne = normalize(make_float3(a * Nh.x, a * Nh.y, fmaxf(Nh.z, 0.0f)));
+  return normalize(t * Ne.x + b * Ne.y + n * Ne.z);
+}
+
+/** Solid-angle PDF for reflecting wo → wi when h was sampled from GGX VNDF. */
+__forceinline__ __host__ __device__ float pdf_ggx_vndf_reflect(const float3 &n, const float3 &wo,
+                                                             const float3 &wi, float roughness) {
+  const float n_dot_v = dot(n, wo);
+  const float n_dot_l = dot(n, wi);
+  if (n_dot_v <= 0.0f || n_dot_l <= 0.0f) {
+    return 0.0f;
+  }
+  const float3 h = normalize(wo + wi);
+  const float n_dot_h = fmaxf(dot(n, h), 0.0f);
+  const float v_dot_h = fmaxf(dot(wo, h), 0.0f);
+  if (n_dot_h < 1e-6f || v_dot_h < 1e-6f) {
+    return 0.0f;
+  }
+  const float a = fmaxf(roughness, 0.045f);
+  const float a2 = a * a;
+  const float D = ggx_d(n_dot_h, a2);
+  const float G1 = smith_g1_ggx(n_dot_v, a);
+  const float pdf_h = G1 * v_dot_h * D / fmaxf(n_dot_v, 1e-6f);
+  return pdf_h / fmaxf(4.0f * v_dot_h, 1e-6f);
 }
 
 // Evaluate opaque metallic-roughness BRDF. Returns f (not f*cos). Sets pdf_out.
@@ -61,39 +133,13 @@ __forceinline__ __host__ __device__ float3 eval_opaque_bsdf(const float3 &base_c
   const float3 brdf =
       base_color * ((1.0f - metallic) * (1.0f - f_avg) * (1.0f / 3.14159265f)) + spec;
 
-  const float pdf_h = D * n_dot_h;
-  const float pdf_spec = pdf_h / fmaxf(4.0f * v_dot_h, 1e-6f);
+  const float pdf_spec = pdf_ggx_vndf_reflect(n, wo, wi, roughness);
   const float pdf_diff = n_dot_l * (1.0f / 3.14159265f);
 
   const float w_spec = saturatef(metallic + (1.0f - metallic) * f_avg);
   const float w_diff = 1.0f - w_spec;
   pdf_out = w_diff * pdf_diff + w_spec * pdf_spec;
   return brdf;
-}
-
-__forceinline__ __host__ __device__ float3 sample_ggx_vndf(unsigned &seed, const float3 &n,
-                                                          const float3 &wo, float roughness) {
-  const float a = fmaxf(roughness, 0.045f);
-  float3 t, b;
-  orthonormal_basis(n, t, b);
-  const float3 wo_l = make_float3(dot(wo, t), dot(wo, b), dot(wo, n));
-  float3 v = normalize(make_float3(a * wo_l.x, a * wo_l.y, wo_l.z));
-  if (v.z < 0.0f) {
-    v = -v;
-  }
-  float3 t1, t2;
-  orthonormal_basis(v, t1, t2);
-  const float r1 = rnd(seed);
-  const float r2 = rnd(seed);
-  const float phi = 2.0f * 3.14159265f * r1;
-  const float z = 1.0f - r2;
-  const float sin_theta = sqrtf(fmaxf(0.0f, 1.0f - z * z));
-  float3 h = t1 * (cosf(phi) * sin_theta) + t2 * (sinf(phi) * sin_theta) + v * z;
-  if (h.z < 0.0f) {
-    h = -h;
-  }
-  h = normalize(make_float3(a * h.x, a * h.y, fmaxf(h.z, 1e-6f)));
-  return normalize(t * h.x + b * h.y + n * h.z);
 }
 
 struct BsdfSample {

@@ -482,17 +482,24 @@ __forceinline__ __device__ void integrate_flame_volume(RadiancePRD *prd, const n
 __forceinline__ __device__ void trace_radiance(RadiancePRD *prd) {
   unsigned p0, p1;
   pack_pointer(prd, p0, p1);
-  optixTrace(params.handle, prd->origin, prd->direction, 1e-3f, 1e16f, 0.0f,
+  optixTrace(params.handle, prd->origin, prd->direction, 1e-4f, 1e16f, 0.0f,
              OptixVisibilityMask(255), OPTIX_RAY_FLAG_NONE, nrtx::RAY_TYPE_RADIANCE,
              nrtx::RAY_TYPE_COUNT, nrtx::RAY_TYPE_RADIANCE, p0, p1);
 }
 
-__forceinline__ __device__ bool trace_shadow(const float3 &origin, const float3 &dir, float tmax) {
+/** Shadow ray from surface point; offsets origin along geometric normal toward dir. */
+__forceinline__ __device__ bool trace_shadow(const float3 &origin, const float3 &geom_n,
+                                            const float3 &dir, float tmax) {
+  const float3 n_off = geom_n * (nrtx::dot(dir, geom_n) >= 0.0f ? 1.0f : -1.0f);
+  const float3 o = nrtx::offset_ray_origin(origin, n_off);
+  const float3 delta = origin - o;
+  // Account for origin nudge so tmax still reaches the light.
+  const float tmax_adj = fmaxf(tmax + nrtx::dot(delta, dir) - 1e-4f, 0.0f);
   ShadowPRD prd;
   prd.occluded = 0;
   unsigned p0, p1;
   pack_pointer(&prd, p0, p1);
-  optixTrace(params.handle, origin, dir, 1e-3f, tmax - 1e-3f, 0.0f, OptixVisibilityMask(255),
+  optixTrace(params.handle, o, dir, 1e-4f, tmax_adj, 0.0f, OptixVisibilityMask(255),
              OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT | OPTIX_RAY_FLAG_DISABLE_CLOSESTHIT,
              nrtx::RAY_TYPE_SHADOW, nrtx::RAY_TYPE_COUNT, nrtx::RAY_TYPE_SHADOW, p0, p1);
   return prd.occluded != 0;
@@ -698,13 +705,14 @@ extern "C" __global__ void __closesthit__radiance() {
         const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
         const float cos_surf = nrtx::dot(n, to_light);
         if (cos_surf > 0.0f && cos_light > 0.0f && pdf_area > 0.0f) {
-          if (!trace_shadow(p, to_light, dist)) {
+          if (!trace_shadow(p, ng_geom, to_light, dist)) {
+            // Virtual quad lights have no BVH geometry — BSDF never hits them; MIS weight = 1.
             const float pdf_light = pdf_area * dist2 / (cos_light * total_lights);
             float pdf_bsdf = 0.0f;
             const float3 f =
                 nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, to_light, pdf_bsdf);
-            const float w = nrtx::mis_balance(pdf_light, pdf_bsdf);
-            prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
+            (void)pdf_bsdf;
+            prd->radiance += prd->throughput * f * Le * (cos_surf / fmaxf(pdf_light, 1e-8f));
           }
         }
       } else {
@@ -718,14 +726,15 @@ extern "C" __global__ void __closesthit__radiance() {
           const float cos_aim = nrtx::dot(-to_light, spot.direction);
           if (cos_surf > 0.0f && cos_aim > spot.cos_outer) {
             const float cone = smoothstep(spot.cos_outer, spot.cos_inner, cos_aim);
-            if (cone > 0.0f && !trace_shadow(p, to_light, dist)) {
+            if (cone > 0.0f && !trace_shadow(p, ng_geom, to_light, dist)) {
+              // Virtual spot lights — no geometry; MIS weight = 1.
               const float pdf_light = 1.0f / static_cast<float>(total_lights);
               float pdf_bsdf = 0.0f;
               const float3 f = nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo,
                                                      to_light, pdf_bsdf);
+              (void)pdf_bsdf;
               const float3 Le = spot.emission * (cone / dist2);
-              const float w = nrtx::mis_balance(pdf_light, pdf_bsdf);
-              prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
+              prd->radiance += prd->throughput * f * Le * (cos_surf / fmaxf(pdf_light, 1e-8f));
             }
           }
         }
@@ -739,7 +748,7 @@ extern "C" __global__ void __closesthit__radiance() {
       const float3 Le = sample_env_map(prd->seed, wi_env, pdf_env);
       const float cos_surf = nrtx::dot(n, wi_env);
       if (cos_surf > 0.0f && pdf_env > 1e-8f && nrtx::luminance(Le) > 0.0f) {
-        if (!trace_shadow(p, wi_env, 1e16f)) {
+        if (!trace_shadow(p, ng_geom, wi_env, 1e16f)) {
           float pdf_bsdf = 0.0f;
           const float3 f =
               nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, wi_env, pdf_bsdf);
@@ -800,7 +809,9 @@ extern "C" __global__ void __closesthit__radiance() {
     prd->throughput = prd->throughput / (1.0f - q);
   }
 
-  prd->origin = p;
+  // Offset along geometric normal toward the outgoing direction (handles transmission).
+  const float3 n_off = ng_geom * (nrtx::dot(wi, ng_geom) >= 0.0f ? 1.0f : -1.0f);
+  prd->origin = nrtx::offset_ray_origin(p, n_off);
   prd->direction = wi;
   prd->depth += 1;
 }

@@ -5,6 +5,15 @@ All notable changes to LumenCore are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **GGX VNDF**: Heitz 2018 visible-normal sampling + matching solid-angle PDF; exact Smith G1 (was stretched-space uniform hemisphere with NDF pdf — biased)
+- **Virtual lights**: quad/spot NEE MIS weight is 1 (BSDF cannot hit them); HDRI MIS unchanged
+- **Self-intersection**: geometric-normal `offset_ray_origin` for continuation and shadow rays
+- Scenes no longer dual-register emissive mesh + `add_quad_light` for the same light
+
 ## [0.16.0] - 2026-07-18
 
 ### Added

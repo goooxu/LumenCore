@@ -21,7 +21,7 @@
 
 NEE 在 closesthit 中、且材质**不是玻璃、不是自发光**时启用（`enable_nee`）。
 
-对面光：采样灯上一点 → 阴影测试 → 用 `eval_opaque_bsdf` 得 $`f_r`$ 与 `pdf_bsdf` → 用灯的立体角 pdf 做 MIS。
+对面光 / 聚光：采样灯 → 阴影测试 → `eval_opaque_bsdf` 得 $`f_r`$ → **权重恒为 1**（见下）。对 HDRI：再用平衡 MIS。
 
 ## 平衡启发式 MIS
 
@@ -31,8 +31,19 @@ NEE 在 closesthit 中、且材质**不是玻璃、不是自发光**时启用（
 w_a=\frac{p_a}{p_a+p_b}.
 ```
 
-代码：`mis_balance(pdf_a, pdf_b)`（`bsdf.h`）。  
-NEE 时权重为 $`w = p_{\mathrm{light}} / (p_{\mathrm{light}} + p_{\mathrm{bsdf}})`$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权，避免与环境 NEE 双重计数。
+代码：`mis_balance(pdf_a, pdf_b)`（`bsdf.h`）。
+
+**重要区分：**
+
+| 光源 | BSDF 能否命中？ | NEE 权重 |
+|------|-----------------|----------|
+| `add_quad_light` / `add_spot_light` | 否（无 BVH 几何） | **恒为 1** |
+| HDRI 环境 | 能（miss） | `mis_balance` |
+| 网格 `emission` | 能（命中累加） | 不做 NEE |
+
+勿把发光网格与同姿态 `add_quad_light` **双注册**，否则在虚拟灯 $w=1$ 下会双计。需要看见灯板时用非发光浅色面板 + QuadLight，或仅用发光网格（关闭该灯的 NEE）。
+
+NEE 时 HDRI 权重为 $`w = p_{\mathrm{env}} / (p_{\mathrm{env}} + p_{\mathrm{bsdf}})`$；miss 打到 HDRI 时，用上一跳存的 `last_pdf` 与 `pdf_env_map` 再加权。
 
 ## HDRI 环境贴图
 
@@ -51,15 +62,15 @@ NEE 时权重为 $`w = p_{\mathrm{light}} / (p_{\mathrm{light}} + p_{\mathrm{bsd
 
 演示：`ggx_studio` / `materials_ball` / `outdoor_env` 使用 `assets/env/studio.hdr`。
 
-## 阴影射线
+## 阴影射线与自相交
 
-`trace_shadow` 使用 shadow ray type：命中即遮挡。  
-火焰体积代理盒与**玻璃**对阴影透明（`anyhit` 里 `IgnoreIntersection`），否则火球/玻璃里的灯照不出来。
+`trace_shadow` / 路径续射使用几何法线上的 `offset_ray_origin`（Ray Tracing Gems 稳健偏移），`tmin` 约 $10^{-4}$，避免硬 epsilon 导致的痤疮或漏光。火焰体积代理盒与**玻璃**对阴影透明（`anyhit` 里 `IgnoreIntersection`），否则火球/玻璃里的灯照不出来。
 
 ## 小结
 
 - NEE：主动连灯，降方差。
-- MIS：多种采样策略无偏融合。
+- 虚拟 quad/spot：NEE 权重为 1；HDRI：MIS。
 - HDRI：环境当光源，用亮度 CDF 采样。
+- 射线原点沿几何法线偏移，减轻自相交。
 
 下一章：[06 体积与介质](06-volumes-media.md)。

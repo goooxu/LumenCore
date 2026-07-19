@@ -50,4 +50,26 @@ __forceinline__ __device__ float3 cosine_sample_hemisphere(unsigned &seed, const
   return normalize(t * x + b * y + n * z);
 }
 
+/**
+ * Ray Tracing Gems Ch.6 — robust origin offset along geometric normal to avoid
+ * self-intersection (int-domain nudge for large |p|, float nudge near origin).
+ */
+__forceinline__ __device__ float3 offset_ray_origin(const float3 &p, const float3 &n) {
+  constexpr float kOrigin = 1.0f / 32.0f;
+  constexpr float kFloatScale = 1.0f / 65536.0f;
+  constexpr float kIntScale = 256.0f;
+
+  const int3 of_i = make_int3(static_cast<int>(kIntScale * n.x), static_cast<int>(kIntScale * n.y),
+                              static_cast<int>(kIntScale * n.z));
+
+  const float3 p_i = make_float3(
+      __int_as_float(__float_as_int(p.x) + ((p.x < 0.0f) ? -of_i.x : of_i.x)),
+      __int_as_float(__float_as_int(p.y) + ((p.y < 0.0f) ? -of_i.y : of_i.y)),
+      __int_as_float(__float_as_int(p.z) + ((p.z < 0.0f) ? -of_i.z : of_i.z)));
+
+  return make_float3(fabsf(p.x) < kOrigin ? p.x + kFloatScale * n.x : p_i.x,
+                     fabsf(p.y) < kOrigin ? p.y + kFloatScale * n.y : p_i.y,
+                     fabsf(p.z) < kOrigin ? p.z + kFloatScale * n.z : p_i.z);
+}
+
 } // namespace nrtx

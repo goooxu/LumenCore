@@ -211,8 +211,8 @@ def build_render_scene(
                 absorption=(0.08, 0.04, 0.02),
             )
         ),
-        "light": scene.add_material(
-            lc.Material(base_color=(0, 0, 0), roughness=1.0, emission=(2.2, 2.0, 1.8))
+        "light_panel": scene.add_material(
+            lc.Material(base_color=(0.92, 0.90, 0.85), roughness=0.9)
         ),
     }
     brick_cache: dict[tuple[float, float, float], int] = {}
@@ -278,8 +278,8 @@ def build_render_scene(
                 add_proxy_light=True,
             )
 
-    # Dim fill — world-space quad (orphan mesh → identity IAS instance).
-    scene.add_mesh(lc.make_quad((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), mat_ids["light"]))
+    # Dim fill — non-emissive panel + virtual QuadLight (no mesh emission double-count).
+    scene.add_mesh(lc.make_quad((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), mat_ids["light_panel"]))
     scene.add_quad_light((-1.5, 7.5, -1.5), (3.0, 0, 0), (0, 0, 3.0), (2.2, 2.0, 1.8))
     scene.add_quad_light((4.0, 5.0, -3.0), (0.0, 0, 2.0), (0, -2.0, 0), (0.8, 0.85, 1.0))
 

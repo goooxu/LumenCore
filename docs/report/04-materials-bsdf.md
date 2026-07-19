@@ -60,10 +60,17 @@ f_s=\frac{D\cdot G\cdot F}{4\,(n\cdot\omega_o)\,(n\cdot\omega_i)}.
 
 不透明最终 BRDF ≈ **漫反射 × (1−metal)×(1−F) + 镜面**，见 `eval_opaque_bsdf`。
 
-### 采样：VNDF
+### 采样：Heitz VNDF
 
-`sample_ggx_vndf` 按可见法线分布抽微表面法线 $h$，再关于 $h$ 反射得到 $`\omega_i`$。  
-漫反射与镜面用随机选择混合，pdf 在 `eval_opaque_bsdf` 里一并估算，供 MIS 使用。
+`sample_ggx_vndf` 按 [Heitz JCGT 2018](https://jcgt.org/published/0007/04/01/) 的可见法线分布抽微表面法线 $h$（拉伸空间圆盘采样再逆拉伸），再关于 $h$ 反射得到 $`\omega_i`$。  
+镜面立体角 pdf 为
+
+```math
+p(h)=G_1(\omega_o)\,(\omega_o\cdot h)\,D(h)\,/\,(n\cdot\omega_o),\qquad
+p(\omega_i)=p(h)/(4\,\omega_o\cdot h).
+```
+
+`smith_g1_ggx` 使用精确 GGX Smith $G_1$（与 VNDF pdf 一致）。漫反射与镜面用随机选择混合，总 pdf 在 `eval_opaque_bsdf` 里混合，供 HDRI MIS 使用。
 
 ![GGX Studio](../../outputs/ggx_studio.avif)
 
