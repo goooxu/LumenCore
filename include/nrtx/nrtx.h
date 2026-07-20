@@ -136,8 +136,8 @@ struct RenderConfig {
   int max_depth = 16;
   bool denoise = true;
   bool enable_nee = true;
-  /** Render backend: "optix" (default full path tracer) or "vulkan" (Phase 1 RT path tracer). */
-  std::string backend = "optix";
+  /** Render backend: "vulkan" (default) or "optix" (legacy OptiX path tracer). */
+  std::string backend = "vulkan";
   std::string output_path = "out.avif";
 };
 

@@ -16,7 +16,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   - **Phase 2b**: HDRI equirect + CDF sampling + env MIS; albedo/normal texture sampling (UV + tangents)
   - **Phase 2c**: Beer–Lambert medium (`absorption` on enter/exit glass); path + NEE transmittance; skip HDRI NEE inside medium
   - **Phase 2d**: Per-mesh BLAS + TLAS instances (PhysX poses); procedural flame volume march; shadow skips flame proxies
-  - **Phase 3**: Vulkan first-hit albedo/normal AOVs; `denoise=true` post-processes via **OptiX Denoiser** (same HDR model as OptiX backend); `vulkan_denoise_available()`; **default backend remains `optix`** until gallery re-render
+  - **Phase 3**: Vulkan first-hit albedo/normal AOVs; `denoise=true` post-processes via **OptiX Denoiser** (same HDR model as OptiX backend); `vulkan_denoise_available()`
+  - **Default backend = `vulkan`**: OptiX kept as `backend="optix"` or `LUMENCORE_BACKEND=optix`; sample AVIFs + gallery re-rendered on Vulkan
   - CMake compiles `src/device/vulkan/*` → SPIR-V via `glslangValidator`; runtime loads via `NRTX_VK_SPV_DIR`
   - CMake `LUMENCORE_ENABLE_VULKAN` (default ON when Vulkan is found); `lumencore.vulkan_backend_available()`
   - Docker image `lumencore-build:cuda13-avif-vk2`: Vulkan + libEGL/X11 (NVIDIA ICD) + glslang-tools; mounts ICD/EGL vendor JSON and `/dev/dri`

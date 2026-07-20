@@ -528,8 +528,14 @@ Renderer::~Renderer() = default;
 
 void Renderer::render(const Scene &scene, const Camera &camera, const RenderConfig &config) {
   std::string backend = config.backend;
+  // Env override for scripts / A-B tests without editing every scene.
+  if (const char *env = std::getenv("LUMENCORE_BACKEND")) {
+    if (env[0] != '\0') {
+      backend = env;
+    }
+  }
   if (backend.empty()) {
-    backend = "optix";
+    backend = "vulkan";
   }
   for (char &c : backend) {
     if (c >= 'A' && c <= 'Z') {
@@ -543,7 +549,7 @@ void Renderer::render(const Scene &scene, const Camera &camera, const RenderConf
   }
   if (backend != "optix") {
     throw std::runtime_error("Unknown RenderConfig.backend \"" + config.backend +
-                             "\" (expected \"optix\" or \"vulkan\")");
+                             "\" (expected \"optix\" or \"vulkan\"; override with LUMENCORE_BACKEND)");
   }
 
   // Lazy OptiX/CUDA context: skip when only using the Vulkan backend.

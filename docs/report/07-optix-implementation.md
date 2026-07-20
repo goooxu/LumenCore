@@ -6,10 +6,10 @@
 
 | 值 | 行为 |
 |----|------|
-| `"optix"`（默认） | 本章所述完整路径追踪 + OptiX Denoiser |
-| `"vulkan"` | **Phase 3**：Vulkan RT 全功能路径追踪；首 hit albedo/normal AOV；`denoise=true` 时用 **OptiX Denoiser** 后处理（非 Vulkan 内嵌 denoise）；**默认仍为 `optix`** |
+| `"vulkan"`（**默认**） | Vulkan RT 全功能路径追踪；首 hit albedo/normal AOV；`denoise=true` 时用 **OptiX Denoiser** 后处理 |
+| `"optix"` | 本章所述完整路径追踪 + 内嵌 OptiX Denoiser（回归 / 对照） |
 
-默认切换条件（尚未启用）：cornell / water_pool / physx / gallery 对照可接受后再改 `RenderConfig.backend` 默认值。
+环境变量 `LUMENCORE_BACKEND=optix|vulkan` 可覆盖 `RenderConfig.backend`（含空默认）。
 
 构建开关：`LUMENCORE_ENABLE_VULKAN`（找到 Vulkan 时定义 `LUMENCORE_HAS_VULKAN`）。Python：`lumencore.vulkan_backend_available()`。SPIR-V 由 CMake/`glslangValidator` 从 `src/device/vulkan/` 编译，运行时 `NRTX_VK_SPV_DIR` 指向输出目录。
 
