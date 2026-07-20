@@ -35,19 +35,14 @@ COMPARE_WIDTH="${COMPARE_WIDTH:-1024}"
 
 HOST_OUT="${NRTX_OUT_DIR:-/tmp/LumenCore-out}"
 HOST_BUILD="${NRTX_BUILD_DIR:-/tmp/LumenCore-build}"
-# Optional machine-local PhysX (e.g. aarch64 build at /tmp/LumenCore-physx).
-PHYSX_ROOT="${NRTX_PHYSX_ROOT:-}"
+# PhysX is built into the CMake tree by default; override with NRTX_PHYSX_ROOT if needed.
+PHYSX_ROOT="${NRTX_PHYSX_ROOT:-${HOST_BUILD}/_deps/physx}"
 REPO_GALLERY="${ROOT}/outputs/gallery"
 mkdir -p "${HOST_OUT}/gallery/compare" "${REPO_GALLERY}/compare"
 
 echo "[render_gallery] root=${ROOT} gpus=${NUM_GPUS} arch=${CUDA_ARCH}"
 echo "[render_gallery] host_out=${HOST_OUT} host_build=${HOST_BUILD}"
-echo "[render_gallery] physx_root=${PHYSX_ROOT:-<repo third_party/physx>}"
-
-CMAKE_EXTRA=""
-if [[ -n "${PHYSX_ROOT}" ]]; then
-  CMAKE_EXTRA="-DPHYSX_ROOT=/physx"
-fi
+echo "[render_gallery] physx_root=${PHYSX_ROOT}"
 
 run_docker() {
   local gpu="$1"
@@ -57,10 +52,10 @@ run_docker() {
     ./docker/run.sh "$@"
 }
 
-# --- Build once (all GPUs available) ------------------------------------------
+# --- Build once (CMake fetches OptiX/PhysX/stb/pybind11 on first run) ----------
 echo "[render_gallery] building ..."
 run_docker all \
-  "cmake -S /work -B /out -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} ${CMAKE_EXTRA} && cmake --build /out -j\$(nproc)"
+  "cmake -S /work -B /out -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH} -DLUMENCORE_FETCH_DEPS=ON && cmake --build /out -j\$(nproc)"
 
 # --- Job list: gpu_index|label|python_cmd -------------------------------------
 # Round-robin GPU assignment.

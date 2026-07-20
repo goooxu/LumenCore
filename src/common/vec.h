@@ -66,9 +66,6 @@ __forceinline__ __host__ __device__ float length(const float3 &a) {
 __forceinline__ __host__ __device__ float3 normalize(const float3 &a) {
   return a / length(a);
 }
-__forceinline__ __host__ __device__ float3 reflect(const float3 &i, const float3 &n) {
-  return i - 2.0f * dot(i, n) * n;
-}
 __forceinline__ __host__ __device__ float clamp(float v, float lo, float hi) {
 #ifdef __CUDACC__
   return fminf(hi, fmaxf(lo, v));

@@ -1,9 +1,7 @@
 #include <optix.h>
 
 #include "LaunchParams.h"
-#include "bsdf.h"
-#include "sampling.h"
-#include "vec.h"
+#include "bsdf.h" // pulls sampling.h + vec.h
 
 extern "C" {
 __constant__ nrtx::LaunchParams params;

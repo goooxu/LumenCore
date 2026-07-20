@@ -2,22 +2,22 @@
 
 ## 环境要点
 
-- NVIDIA GPU（带 RT Core）
-- Docker + CUDA 13 开发镜像（`docker/run.sh` 会准备带 Python 头文件的构建镜像）
-- OptiX 头文件在 `third_party/optix`
-- PhysX 静态库在 `third_party/physx/lib`，GPU 库 `third_party/physx/bin/libPhysXGpu_64.so`
-- Denoiser 权重：`/usr/share/nvidia/nvoptix.bin`（宿主机挂载进容器）
+- **Linux** + 可用 NVIDIA 驱动（`nvidia-smi` 正常；路径追踪需要 RT Core）
+- **Docker** + NVIDIA Container Toolkit（编译器 / CUDA / libavif 在镜像里）
+- **首次构建需要网络**：CMake 拉取 OptiX 头、PhysX、pybind11、stb
+- Denoiser 权重：宿主机 `/usr/share/nvidia/nvoptix.bin`（挂进容器）
 
 详细说明以仓库根目录 [README.md](../../README.md) 为准。
 
 ## 典型命令
 
 ```bash
-chmod +x docker/run.sh scripts/setup_physx.sh
-./scripts/setup_physx.sh   # 若尚未有 PhysX 库
+chmod +x scripts/build.sh docker/run.sh
 
-# 配置并编译（CMAKE_CUDA_ARCHITECTURES 按本机 GPU 设定）
-./docker/run.sh 'cmake -S /work -B /out && cmake --build /out -j$(nproc)'
+# 一键配置 + 编译（第三方依赖在 configure 时拉取；PhysX 首次较慢）
+./scripts/build.sh
+# 产物：/tmp/LumenCore-build/python/lumencore*.so
+# PhysX：/tmp/LumenCore-build/_deps/physx
 
 # 渲染示例
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.avif 256 1'
@@ -26,14 +26,14 @@ chmod +x docker/run.sh scripts/setup_physx.sh
 ./docker/run.sh 'python3 /work/python/scenes/physx_collapse.py /results/physx_collapse.avif 96 1'
 ```
 
-`docker/run.sh` 把仓库挂到 `/work`（只读），构建目录与结果在宿主机临时目录（如 `/tmp/LumenCore-build`、`/tmp/LumenCore-out`），避免 NFS 上以 root 写失败。
+`docker/run.sh` 把仓库挂到 `/work`（只读），构建目录与结果在宿主机临时目录（如 `/tmp/LumenCore-build`、`/tmp/LumenCore-out`），避免 NFS 上以 root 写失败。`LD_LIBRARY_PATH` 会包含 `<build>/_deps/physx/bin` 以便加载 `libPhysXGpu_64.so`。
 
 ```mermaid
 flowchart LR
   hostRepo[Host_repo] -->|mount_ro| work["/work"]
   hostBuild[Host_build] -->|mount| out["/out"]
   hostOut[Host_results] -->|mount| results["/results"]
-  work --> cmake[cmake_build]
+  work --> cmake[cmake_fetch_and_build]
   cmake --> out
   out --> py[python_scenes]
   py --> results
@@ -53,13 +53,14 @@ flowchart LR
 
 ## 常见坑
 
-- **PhysX init 失败**：检查 GPU 库是否在 `LD_LIBRARY_PATH`（`run.sh` 已设置）。
+- **PhysX init 失败**：检查 `<build>/_deps/physx/bin/libPhysXGpu_64.so` 是否在 `LD_LIBRARY_PATH`（`run.sh` 已设置）。
 - **没有图 / 很噪**：提高 spp；确认 denoise=1。
 - **改了 `.cu` 不生效**：需重新 `cmake --build`，因为要重编 OptiX-IR。
+- **离线构建**：`-DLUMENCORE_FETCH_DEPS=OFF` 并提供 `-DOPTIX_INCLUDE_DIR` / `-DPHYSX_ROOT` / `-DSTB_INCLUDE_DIR`。
 
 ## 小结
 
-- 日常：用 `docker/run.sh` 编译 + 渲染。
+- 日常：`./scripts/build.sh` 编译，再用 `docker/run.sh` 跑场景。
 - 结果在 `/results`（宿主机临时目录），需要时再拷回 `outputs/`。
 
-附录：[符号与术语表](appendix-symbols.md)。
+附录：[符号与术语表](appendix-symbols.md).

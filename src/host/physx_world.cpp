@@ -133,8 +133,8 @@ void PhysXWorld::init() {
   if (!impl_->cuda_manager) {
     throw std::runtime_error(
         "PhysX GPU init failed: could not create a valid CUDA context manager. "
-        "Ensure third_party/physx/bin/libPhysXGpu_64.so is on LD_LIBRARY_PATH "
-        "(docker/run.sh sets this) and an NVIDIA GPU is available.");
+        "Ensure libPhysXGpu_64.so is on LD_LIBRARY_PATH "
+        "(docker/run.sh adds <build>/_deps/physx/bin) and an NVIDIA GPU is available.");
   }
 
   PxSceneDesc scene_desc(impl_->physics->getTolerancesScale());

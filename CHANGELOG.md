@@ -7,6 +7,18 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Changed
+
+- **Build fetches third-party deps at configure time** (`LUMENCORE_FETCH_DEPS=ON` by default):
+  - OptiX headers from [NVIDIA/optix-dev](https://github.com/NVIDIA/optix-dev)
+  - PhysX 5 via `scripts/fetch_physx.sh` → `<build>/_deps/physx`
+  - stb from [nothings/stb](https://github.com/nothings/stb); pybind11 unchanged
+- New one-shot entry: `./scripts/build.sh` (Linux + `nvidia-smi` + Docker)
+- Removed vendored `third_party/optix`, `third_party/physx/include`, `third_party/stb_image.h` from the tree
+- `docker/run.sh` / `render_gallery.sh` default PhysX path to the CMake build tree
+- Removed `scripts/setup_physx.sh` (use `./scripts/build.sh` / CMake fetch)
+- `scripts/render_gallery.sh`: per-feature `NEE_SPP` / `DENOISER_SPP`; NEE and Beer compares pass `--denoise 0`
+
 ### Fixed
 
 - **Gallery feature compares** (NEE / Denoiser / Beer-Lambert) were hard to tell ON from OFF:
@@ -20,10 +32,6 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **GGX VNDF**: Heitz 2018 visible-normal sampling + matching solid-angle PDF; exact Smith G1
 - **Virtual lights**: quad/spot NEE weight is 1 by default; HDRI MIS unchanged
 - **Self-intersection**: geometric-normal `offset_ray_origin` for continuation and shadow rays
-
-### Changed
-
-- `scripts/render_gallery.sh`: per-feature `NEE_SPP` / `DENOISER_SPP`; NEE and Beer compares pass `--denoise 0`
 
 ## [0.16.0] - 2026-07-18
 

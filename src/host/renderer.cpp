@@ -1,8 +1,5 @@
-#include "nrtx/nrtx.h"
+#include "nrtx/nrtx.h" // LaunchParams + vec via public API
 #include "nrtx/image_io.h"
-
-#include "LaunchParams.h"
-#include "vec.h"
 
 #include <optix.h>
 #include <optix_function_table_definition.h>

@@ -11,13 +11,16 @@ compile_commands.json
 *.ptx
 /tmp/
 
-# PhysX prebuilt binaries (see scripts/setup_physx.sh)
-third_party/physx/lib/
-third_party/physx/bin/
+# Third-party is fetched at configure time (see cmake/, scripts/fetch_physx.sh)
+third_party/physx/
+third_party/optix/
+third_party/stb/
+third_party/stb_image.h
 
 # IDE / OS
 .vscode/
 .idea/
+.cursor/
 *.swp
 .DS_Store
 *.user

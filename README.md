@@ -92,33 +92,31 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 ## Requirements
 
-- NVIDIA GPU with RT Cores
-- Docker with CUDA 13+ toolkit (default base: `nvidia/cuda:13.0.1-devel-ubuntu24.04`; `docker/run.sh` builds `lumencore-build:cuda13-avif` with Python headers + libavif)
-- `libavif` (provided in the build image) for HDR AVIF output and AVIF texture decode
-- CUDA architecture is **auto-detected** via `nvidia-smi` at CMake configure (override with `-DCMAKE_CUDA_ARCHITECTURES=` if needed)
-- OptiX denoiser weights at `/usr/share/nvidia/nvoptix.bin`
-- Vendored OptiX 9 headers under `third_party/optix`
-- PhysX 5 static libs under `third_party/physx/lib` (run `scripts/setup_physx.sh` once; needs network on first fetch). GPU rigid bodies require `third_party/physx/bin/libPhysXGpu_64.so` on `LD_LIBRARY_PATH` (`docker/run.sh` sets this). PhysX is GPU-only; init fails if GPU PhysX is unavailable.
-- Network on first CMake configure (FetchContent downloads pybind11)
+- **Linux**
+- **NVIDIA GPU** with a working driver (`nvidia-smi` lists the card; RT Cores for path tracing)
+- **Docker** + NVIDIA Container Toolkit (build/run isolation; CUDA compiler & libs come from the image)
+- **Network on first build** — CMake fetches OptiX headers, PhysX, pybind11, and stb
+
+Everything else (CUDA toolkit, OptiX SDK headers, PhysX static libs + GPU `.so`, libavif, CMake, Python headers) is pulled or provided automatically. Denoiser weights come from the host driver package (`/usr/share/nvidia/nvoptix.bin`).
+
+Optional overrides: `-DOPTIX_INCLUDE_DIR=`, `-DPHYSX_ROOT=`, `-DSTB_INCLUDE_DIR=`, or `-DLUMENCORE_FETCH_DEPS=OFF` for offline/preinstalled deps.
 
 ## Quick start
 
 ```bash
-chmod +x docker/run.sh scripts/setup_physx.sh
+chmod +x scripts/build.sh docker/run.sh
 
-# One-time PhysX install (skip if third_party/physx/lib already populated)
-./scripts/setup_physx.sh
+# Configure + build (fetches third-party deps; first run may take several minutes for PhysX)
+./scripts/build.sh
+# → /tmp/LumenCore-build/python/lumencore*.so
 
-# Configure + build Python module → /tmp/LumenCore-build/python/lumencore*.so
-./docker/run.sh 'cmake -S /work -B /out && cmake --build /out -j$(nproc)'
-
-# Render scenes (PYTHONPATH is set by docker/run.sh)
+# Render scenes (PYTHONPATH / PhysX GPU .so set by docker/run.sh)
 ./docker/run.sh 'python3 /work/python/scenes/atelier.py /results/gallery/showcase.avif 192 1'
 ./docker/run.sh 'python3 /work/python/scenes/dusk_observatory.py /results/gallery/dusk_observatory.avif 192 1'
 ./docker/run.sh 'python3 /work/python/scenes/assembly_hall.py /results/gallery/assembly_hall.avif 192 1'
 ./docker/run.sh 'python3 /work/python/scenes/gallery_compare.py --feature normal --mode on --out /results/gallery/compare/normal_on.avif'
 # Or multi-GPU batch:
-# NRTX_PHYSX_ROOT=/tmp/LumenCore-physx ./scripts/render_gallery.sh
+# ./scripts/render_gallery.sh
 ./docker/run.sh 'python3 /work/python/scenes/ggx_studio.py /results/ggx_studio.avif 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/cornell.py /results/cornell.avif 256 1'
 ./docker/run.sh 'python3 /work/python/scenes/materials_ball.py /results/materials_ball.avif 256 1'
@@ -166,7 +164,9 @@ lc.Renderer().render(scene, cam, cfg)
 | `include/nrtx` | C++ host scene API + `PhysXWorld` |
 | `src/device` | OptiX programs (`.cu` → OptiX-IR) |
 | `src/host` | Context, GAS, PhysX wrapper, OBJ/HDRI loaders, denoiser, AVIF I/O |
-| `scripts/setup_physx.sh` | Fetch/build PhysX 5 into `third_party/physx` (or `PHYSX_INSTALL`) |
+| `scripts/build.sh` | One-shot host preflight + Docker CMake build (fetches deps) |
+| `scripts/fetch_physx.sh` | PhysX clone/build helper (called by CMake) |
+| `cmake/` | FetchContent / PhysX install modules |
 | `scripts/render_gallery.sh` | Multi-GPU gallery showcase + compare renders |
 | `scripts/gen_sparky.py` | Procedural Sparky OBJ + albedo atlas |
 | `scripts/gen_studio_hdr.py` | Procedural studio Radiance HDR |

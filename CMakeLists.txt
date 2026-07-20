@@ -29,7 +29,7 @@ if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
                  "(from nvidia-smi compute_cap=${_NRTX_COMPUTE_CAP})")
 endif()
 
-project(LumenCore LANGUAGES CXX CUDA)
+project(LumenCore LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -41,27 +41,8 @@ find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(AVIF REQUIRED IMPORTED_TARGET libavif)
 
-include(FetchContent)
-FetchContent_Declare(
-  pybind11
-  GIT_REPOSITORY https://github.com/pybind/pybind11.git
-  GIT_TAG v2.13.6
-)
-FetchContent_MakeAvailable(pybind11)
-
-set(OPTIX_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/third_party/optix" CACHE PATH "OptiX include directory")
-if(NOT EXISTS "${OPTIX_INCLUDE_DIR}/optix.h")
-  message(FATAL_ERROR "OptiX headers not found at ${OPTIX_INCLUDE_DIR}")
-endif()
-
-set(PHYSX_ROOT "${CMAKE_SOURCE_DIR}/third_party/physx" CACHE PATH "PhysX 5 install root (include/ + lib/)")
-set(PHYSX_LIB_DIR "${PHYSX_ROOT}/lib")
-set(PHYSX_INCLUDE_DIR "${PHYSX_ROOT}/include")
-if(NOT EXISTS "${PHYSX_LIB_DIR}/libPhysX_static_64.a")
-  message(FATAL_ERROR
-    "PhysX static libraries not found under ${PHYSX_LIB_DIR}.\n"
-    "Run scripts/setup_physx.sh (requires network on first fetch) or set -DPHYSX_ROOT=...")
-endif()
+# Third-party: OptiX headers, PhysX, stb, pybind11 (fetched when LUMENCORE_FETCH_DEPS=ON).
+include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 
 add_library(nrtx_host
   src/host/mesh.cpp
@@ -76,23 +57,14 @@ target_include_directories(nrtx_host
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src/common
     ${OPTIX_INCLUDE_DIR}
-    ${CMAKE_SOURCE_DIR}/third_party
-    ${PHYSX_INCLUDE_DIR}
+    ${STB_INCLUDE_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
 )
-target_compile_definitions(nrtx_host PUBLIC PX_PHYSX_STATIC_LIB)
 target_link_libraries(nrtx_host PUBLIC
   CUDA::cudart
   CUDA::cuda_driver
   PkgConfig::AVIF
-  ${PHYSX_LIB_DIR}/libPhysXExtensions_static_64.a
-  ${PHYSX_LIB_DIR}/libPhysX_static_64.a
-  ${PHYSX_LIB_DIR}/libPhysXPvdSDK_static_64.a
-  ${PHYSX_LIB_DIR}/libPhysXCooking_static_64.a
-  ${PHYSX_LIB_DIR}/libPhysXCommon_static_64.a
-  ${PHYSX_LIB_DIR}/libPhysXFoundation_static_64.a
-  pthread
-  dl
+  lumencore_physx
 )
 set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
@@ -132,3 +104,12 @@ set_target_properties(lumencore PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
 )
+
+# Export PhysX GPU lib dir for run scripts (written next to the build tree).
+file(WRITE "${CMAKE_BINARY_DIR}/lumencore_env.sh"
+"export PHYSX_ROOT=\"${PHYSX_ROOT}\"
+export LD_LIBRARY_PATH=\"${PHYSX_BIN_DIR}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"
+export NRTX_PTX=\"${NRTX_SHADER_OPTIXIR}\"
+export PYTHONPATH=\"${CMAKE_BINARY_DIR}/python\${PYTHONPATH:+:\$PYTHONPATH}\"
+export LUMENCORE_ROOT=\"${CMAKE_SOURCE_DIR}\"
+")
