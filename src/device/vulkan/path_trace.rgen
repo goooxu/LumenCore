@@ -4,49 +4,17 @@
 #extension GL_EXT_scalar_block_layout : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
+#include "bindings.glsl"
 #include "bsdf.glsl"
-
-layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
-layout(binding = 1, set = 0, rgba32f) uniform image2D accumImage;
-
-layout(binding = 2, set = 0, scalar) readonly buffer ParamsBuf {
-  LaunchParams params;
-};
-
-layout(binding = 3, set = 0, scalar) readonly buffer Vertices {
-  vec3 vertices[];
-};
-
-layout(binding = 4, set = 0, scalar) readonly buffer Indices {
-  uvec3 indices[];
-};
-
-layout(binding = 5, set = 0, scalar) readonly buffer Materials {
-  MaterialGPU materials[];
-};
-
-layout(binding = 6, set = 0, scalar) readonly buffer MaterialIds {
-  int material_ids[];
-};
-
-layout(binding = 7, set = 0, scalar) readonly buffer Lights {
-  QuadLight lights[];
-};
-
-layout(binding = 8, set = 0, scalar) readonly buffer Spots {
-  SpotLight spots[];
-};
 
 layout(location = 0) rayPayloadEXT HitPayload payload;
 layout(location = 1) rayPayloadEXT ShadowPayload shadow_payload;
 
-// Shadow: anyhit skips glass; miss sets visible=1.
-// No Opaque flag so anyhit runs. Radiance uses Opaque (skips anyhit).
 float visibility(vec3 origin, vec3 dir, float tmax) {
   shadow_payload.visible = 0u;
   uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT |
                gl_RayFlagsNoOpaqueEXT;
-  traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 1 /*miss index*/, origin, TMIN, dir, tmax, 1);
+  traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 1 /*miss*/, origin, TMIN, dir, tmax, 1);
   return float(shadow_payload.visible);
 }
 
@@ -149,21 +117,25 @@ void main() {
       payload.seed = seed;
       payload.radiance = vec3(0.0);
 
-      // Radiance: opaque flag skips anyhit (glass still intersects as solid for primary).
       traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0 /*miss*/, origin, TMIN,
                   direction, TMAX, 0);
 
       seed = payload.seed;
 
       if (payload.hit == 0) {
-        radiance += throughput * payload.radiance;
+        // Environment miss + optional MIS with last BSDF pdf
+        float mis_w = 1.0;
+        if (params.has_env != 0 && params.enable_nee != 0 && depth > 0 && last_pdf > 1e-8) {
+          float pdf_env = pdf_env_map(direction);
+          mis_w = mis_balance(last_pdf, pdf_env);
+        }
+        radiance += throughput * payload.radiance * mis_w;
         break;
       }
 
       vec3 n_geom = payload.hit_normal;
       vec3 p = payload.hit_pos;
       vec3 wo = -direction;
-      // Shading normal: face toward wo for opaque; glass uses geometric + entering test
       vec3 n = n_geom;
       if (payload.transmission <= 0.5 && dot(n, wo) < 0.0) {
         n = -n;
@@ -172,7 +144,6 @@ void main() {
       bool is_emissive = luminance(payload.emission) > 0.0;
       bool is_glass = payload.transmission > 0.5;
 
-      // Emissive hit (path endpoint). depth 0: full weight; use_mis: balance MIS.
       if (is_emissive) {
         float mis_w = 1.0;
         if (depth > 0 && last_pdf > 1e-8 && params.enable_nee != 0) {
@@ -185,7 +156,7 @@ void main() {
         break;
       }
 
-      // NEE: quad + spot (opaque only; glass is BSDF-only)
+      // NEE: area + spot + HDRI
       if (params.enable_nee != 0 && !is_glass) {
         int total_lights = params.light_count + params.spot_count;
         if (total_lights > 0) {
@@ -238,9 +209,26 @@ void main() {
             }
           }
         }
+
+        // HDRI next-event estimation
+        if (params.has_env != 0) {
+          vec3 wi_env;
+          float pdf_env = 0.0;
+          vec3 Le = sample_env_map(seed, wi_env, pdf_env);
+          float cos_surf = dot(n, wi_env);
+          if (cos_surf > 0.0 && pdf_env > 1e-8 && luminance(Le) > 0.0) {
+            if (visibility(offset_ray_origin(p, n_geom * sign(dot(n_geom, wi_env))), wi_env, TMAX) >
+                0.5) {
+              float pdf_bsdf = 0.0;
+              vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness, n,
+                                        wo, wi_env, pdf_bsdf);
+              float w = mis_balance(pdf_env, pdf_bsdf);
+              radiance += throughput * f * Le * (cos_surf * w / pdf_env);
+            }
+          }
+        }
       }
 
-      // BSDF continuation
       prev_origin = origin;
       BsdfSample samp;
       samp.valid = false;
@@ -257,9 +245,8 @@ void main() {
         if (!samp.valid) {
           break;
         }
-        // Dielectric: f already MC weight (pdf=1)
         throughput *= samp.f;
-        last_pdf = 0.0; // no MIS on glass paths
+        last_pdf = 0.0;
         vec3 nl = entering ? n_geom : -n_geom;
         if (samp.transmitted) {
           origin = offset_ray_origin(p, -nl);
@@ -280,7 +267,6 @@ void main() {
         direction = samp.wi;
       }
 
-      // Russian roulette
       if (depth >= 3) {
         float q = clamp(luminance(throughput), 0.05, 0.95);
         if (rnd(seed) > q) {

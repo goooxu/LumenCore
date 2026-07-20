@@ -1,4 +1,4 @@
-// Shared GLSL definitions for LumenCore Vulkan RT path tracer (Phase 1–2).
+// Shared GLSL definitions for LumenCore Vulkan RT path tracer (Phase 1–2b).
 #ifndef LUMENCORE_VK_COMMON_GLSL
 #define LUMENCORE_VK_COMMON_GLSL
 
@@ -28,17 +28,18 @@ struct CameraGPU {
   float pad5;
 };
 
+// Scalar layout; matches host MaterialGPUHost (64 bytes).
 struct MaterialGPU {
   vec3 base_color;
   float metallic;
   float roughness;
   float transmission;
   float ior;
-  float pad0;
-  vec3 emission;
-  float pad1;
-  vec3 absorption;
   int flags;
+  vec3 emission;
+  int albedo_tex; // -1 = none
+  vec3 absorption;
+  int normal_tex; // -1 = none
 };
 
 struct QuadLight {
@@ -65,9 +66,17 @@ struct SpotLight {
   float cos_outer;
 };
 
+// offset into packed RGBA8 uint buffer (pixel index, not byte).
+struct TextureDesc {
+  int offset;
+  int width;
+  int height;
+  int pad;
+};
+
 // std430-friendly scene params (matches host VulkanLaunchParams).
 struct LaunchParams {
-  uint64_t tlas; // unused in shader (bound as AS); keep layout sync
+  uint64_t tlas;
   int width;
   int height;
   int sample_index;
@@ -77,7 +86,13 @@ struct LaunchParams {
   int light_count;
   int spot_count;
   int enable_nee;
-  int pad_flags;
+  int has_env;
+  int env_width;
+  int env_height;
+  float env_total_lum;
+  float pad_env;
+  int texture_count;
+  int pad_tex;
   vec3 background_top;
   float pad0;
   vec3 background_bottom;
@@ -85,28 +100,25 @@ struct LaunchParams {
   CameraGPU camera;
 };
 
-// Radiance payload filled by miss/chit, consumed by rgen.
 struct HitPayload {
-  vec3 radiance;     // miss: env; chit: emission at hit (path weight applied in rgen)
+  vec3 radiance; // miss: env Le
   vec3 hit_pos;
-  vec3 hit_normal;   // geometric outward
-  vec3 base_color;
+  vec3 hit_normal; // shading normal (world)
+  vec3 base_color; // textured
   vec3 emission;
   float metallic;
   float roughness;
   float transmission;
   float ior;
   float t_hit;
-  int hit;           // 0 = miss, 1 = hit
+  int hit;
   uint seed;
 };
 
-// Shadow payload: miss sets visible=1.
 struct ShadowPayload {
-  uint visible; // 1 if unoccluded
+  uint visible;
 };
 
-// PCG hash (tiny)
 uint pcg_hash(uint v) {
   uint state = v * 747796405u + 2891336453u;
   uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
@@ -150,7 +162,6 @@ float luminance(vec3 c) {
   return 0.2126 * c.x + 0.7152 * c.y + 0.0722 * c.z;
 }
 
-// Schlick Fresnel
 float fresnel_schlick(float cos_theta, float ior_ratio) {
   float r0 = (1.0 - ior_ratio) / (1.0 + ior_ratio);
   r0 = r0 * r0;

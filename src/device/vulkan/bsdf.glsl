@@ -2,7 +2,10 @@
 #ifndef LUMENCORE_VK_BSDF_GLSL
 #define LUMENCORE_VK_BSDF_GLSL
 
+// Expects common.glsl already included (via bindings or direct).
+#ifndef LUMENCORE_VK_COMMON_GLSL
 #include "common.glsl"
+#endif
 
 float saturatef(float x) { return clamp(x, 0.0, 1.0); }
 

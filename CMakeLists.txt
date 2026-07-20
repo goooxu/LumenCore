@@ -133,6 +133,7 @@ set(NRTX_VK_SPV_OUTPUTS "")
 if(GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
   # stage:source pairs
   set(NRTX_VK_BSDF_GLSL ${NRTX_VK_SHADER_DIR}/bsdf.glsl)
+  set(NRTX_VK_BINDINGS_GLSL ${NRTX_VK_SHADER_DIR}/bindings.glsl)
   set(_NRTX_VK_SHADERS
     "rgen:path_trace.rgen"
     "rmiss:path_trace.rmiss"
@@ -155,7 +156,7 @@ if(GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
         -I${NRTX_VK_SHADER_DIR}
         ${_src}
         -o ${_spv}
-      DEPENDS ${_src} ${NRTX_VK_COMMON_GLSL} ${NRTX_VK_BSDF_GLSL}
+      DEPENDS ${_src} ${NRTX_VK_COMMON_GLSL} ${NRTX_VK_BSDF_GLSL} ${NRTX_VK_BINDINGS_GLSL}
       COMMENT "Compiling Vulkan RT shader ${_src_name} → SPIR-V"
       VERBATIM
     )

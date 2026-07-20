@@ -62,11 +62,11 @@ struct MaterialGPUHost {
   float roughness;
   float transmission;
   float ior;
-  float pad0;
-  float emission[3];
-  float pad1;
-  float absorption[3];
   int32_t flags;
+  float emission[3];
+  int32_t albedo_tex;
+  float absorption[3];
+  int32_t normal_tex;
 };
 
 struct QuadLightHost {
@@ -93,8 +93,15 @@ struct SpotLightHost {
   float cos_outer;
 };
 
+struct TextureDescHost {
+  int32_t offset;
+  int32_t width;
+  int32_t height;
+  int32_t pad;
+};
+
 struct VulkanLaunchParams {
-  uint64_t tlas; // unused in shader; AS is a descriptor
+  uint64_t tlas;
   int32_t width;
   int32_t height;
   int32_t sample_index;
@@ -104,7 +111,13 @@ struct VulkanLaunchParams {
   int32_t light_count;
   int32_t spot_count;
   int32_t enable_nee;
-  int32_t pad_flags;
+  int32_t has_env;
+  int32_t env_width;
+  int32_t env_height;
+  float env_total_lum;
+  float pad_env;
+  int32_t texture_count;
+  int32_t pad_tex;
   float background_top[3];
   float pad0;
   float background_bottom[3];
@@ -115,6 +128,7 @@ struct VulkanLaunchParams {
 static_assert(sizeof(MaterialGPUHost) == 64, "MaterialGPUHost layout");
 static_assert(sizeof(QuadLightHost) == 80, "QuadLightHost layout");
 static_assert(sizeof(SpotLightHost) == 48, "SpotLightHost layout");
+static_assert(sizeof(TextureDescHost) == 16, "TextureDescHost layout");
 
 void set3(float *d, const float3 &v) {
   d[0] = v.x;
@@ -733,11 +747,12 @@ struct VulkanRT {
   }
 
   void create_pipeline() {
-    // Descriptor set: AS, image, params, verts, idx, mats, mat_ids, lights, spots
+    // 0 AS, 1 image, 2 params, 3-8 geom/lights, 9-11 attrs, 12-14 env, 15-16 textures
+    constexpr uint32_t kBindings = 17;
     const VkShaderStageFlags rt_stages =
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
-    std::array<VkDescriptorSetLayoutBinding, 9> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, kBindings> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     bindings[0].descriptorCount = 1;
@@ -746,7 +761,7 @@ struct VulkanRT {
     bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    for (uint32_t i = 2; i < 9; ++i) {
+    for (uint32_t i = 2; i < kBindings; ++i) {
       bindings[i].binding = i;
       bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bindings[i].descriptorCount = 1;
@@ -882,7 +897,7 @@ struct VulkanRT {
     std::array<VkDescriptorPoolSize, 3> pool_sizes{};
     pool_sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
     pool_sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1};
-    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7};
+    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 15};
     VkDescriptorPoolCreateInfo dpci{};
     dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     dpci.maxSets = 1;
@@ -899,15 +914,13 @@ struct VulkanRT {
   }
 
   void update_descriptors(const AccelerationStructure &tlas, const Image &accum,
-                          const Buffer &params_buf, const Buffer &vertex_buf,
-                          const Buffer &index_buf, const Buffer &mat_buf, const Buffer &mat_id_buf,
-                          const Buffer &light_buf, const Buffer &spot_buf) {
+                          const std::array<const Buffer *, 15> &ssbos) {
     VkWriteDescriptorSetAccelerationStructureKHR as_info{};
     as_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     as_info.accelerationStructureCount = 1;
     as_info.pAccelerationStructures = &tlas.handle;
 
-    std::array<VkWriteDescriptorSet, 9> writes{};
+    std::array<VkWriteDescriptorSet, 17> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext = &as_info;
     writes[0].dstSet = desc_set;
@@ -925,11 +938,9 @@ struct VulkanRT {
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     writes[1].pImageInfo = &img_info;
 
-    std::array<VkDescriptorBufferInfo, 7> bis{};
-    const Buffer *bufs[7] = {&params_buf, &vertex_buf, &index_buf, &mat_buf,
-                             &mat_id_buf, &light_buf,  &spot_buf};
-    for (uint32_t i = 0; i < 7; ++i) {
-      bis[i].buffer = bufs[i]->buffer;
+    std::array<VkDescriptorBufferInfo, 15> bis{};
+    for (uint32_t i = 0; i < 15; ++i) {
+      bis[i].buffer = ssbos[i]->buffer;
       bis[i].offset = 0;
       bis[i].range = VK_WHOLE_SIZE;
       writes[i + 2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1049,33 +1060,67 @@ CameraGPUHost make_camera_gpu(const Camera &cam) {
   return g;
 }
 
-void merge_scene_geometry(const Scene &scene, std::vector<float> &vertices,
-                          std::vector<uint32_t> &indices, std::vector<int32_t> &mat_ids) {
-  vertices.clear();
-  indices.clear();
-  mat_ids.clear();
+struct MergedGeometry {
+  std::vector<float> vertices;   // xyz tightly packed
+  std::vector<float> texcoords;  // uv
+  std::vector<float> normals;    // xyz
+  std::vector<float> tangents;   // xyzw
+  std::vector<uint32_t> indices;
+  std::vector<int32_t> mat_ids;
+};
+
+MergedGeometry merge_scene_geometry(const Scene &scene) {
+  MergedGeometry g;
 
   auto append_mesh = [&](const Mesh &mesh_in, const Pose *pose) {
     Mesh mesh = mesh_in;
     if (pose) {
       mesh = apply_pose_to_mesh(mesh, *pose);
     }
-    const uint32_t base = static_cast<uint32_t>(vertices.size() / 3);
-    for (const float3 &p : mesh.vertices) {
-      vertices.push_back(p.x);
-      vertices.push_back(p.y);
-      vertices.push_back(p.z);
+    ensure_mesh_tangents(mesh);
+    const uint32_t base = static_cast<uint32_t>(g.vertices.size() / 3);
+    const size_t nv = mesh.vertices.size();
+    for (size_t i = 0; i < nv; ++i) {
+      const float3 &p = mesh.vertices[i];
+      g.vertices.push_back(p.x);
+      g.vertices.push_back(p.y);
+      g.vertices.push_back(p.z);
+      float2 uv = make_float2(0.f, 0.f);
+      if (i < mesh.texcoords.size()) {
+        uv = mesh.texcoords[i];
+      }
+      g.texcoords.push_back(uv.x);
+      g.texcoords.push_back(uv.y);
+      float3 n = make_float3(0.f, 1.f, 0.f);
+      if (i < mesh.normals.size()) {
+        n = mesh.normals[i];
+      }
+      g.normals.push_back(n.x);
+      g.normals.push_back(n.y);
+      g.normals.push_back(n.z);
+      float4 t{};
+      t.x = 1.f;
+      t.y = 0.f;
+      t.z = 0.f;
+      t.w = 1.f;
+      if (i < mesh.tangents.size()) {
+        t = mesh.tangents[i];
+      }
+      g.tangents.push_back(t.x);
+      g.tangents.push_back(t.y);
+      g.tangents.push_back(t.z);
+      g.tangents.push_back(t.w);
     }
     for (size_t t = 0; t < mesh.indices.size(); ++t) {
       const int3 &tri = mesh.indices[t];
-      indices.push_back(base + static_cast<uint32_t>(tri.x));
-      indices.push_back(base + static_cast<uint32_t>(tri.y));
-      indices.push_back(base + static_cast<uint32_t>(tri.z));
+      g.indices.push_back(base + static_cast<uint32_t>(tri.x));
+      g.indices.push_back(base + static_cast<uint32_t>(tri.y));
+      g.indices.push_back(base + static_cast<uint32_t>(tri.z));
       int mid = 0;
       if (!mesh.material_ids.empty()) {
         mid = mesh.material_ids[std::min(t, mesh.material_ids.size() - 1)];
       }
-      mat_ids.push_back(mid);
+      g.mat_ids.push_back(mid);
     }
   };
 
@@ -1091,6 +1136,22 @@ void merge_scene_geometry(const Scene &scene, std::vector<float> &vertices,
       append_mesh(m, nullptr);
     }
   }
+  return g;
+}
+
+Buffer upload_storage(VulkanRT &ctx, const void *data, size_t bytes) {
+  const size_t n = std::max(bytes, size_t{4});
+  Buffer b = ctx.create_buffer(n,
+                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  if (bytes > 0 && data) {
+    ctx.upload(b, data, bytes);
+  } else {
+    std::vector<uint8_t> zero(n, 0);
+    ctx.upload(b, zero.data(), n);
+  }
+  return b;
 }
 
 } // namespace
@@ -1106,43 +1167,42 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     throw std::runtime_error("Vulkan backend: scene has no materials");
   }
 
-  std::cout << "Backend: vulkan (Phase 2a path tracer: GGX + spot NEE + glass shadow skip)\n";
+  std::cout << "Backend: vulkan (Phase 2b: GGX + HDRI + textures)\n";
   VulkanRT ctx;
   ctx.init();
   ctx.create_pipeline();
 
-  // Geometry
-  std::vector<float> vertices;
-  std::vector<uint32_t> indices;
-  std::vector<int32_t> mat_ids;
-  merge_scene_geometry(scene, vertices, indices, mat_ids);
-  if (indices.empty()) {
+  MergedGeometry geom = merge_scene_geometry(scene);
+  if (geom.indices.empty()) {
     throw std::runtime_error("Vulkan backend: no triangles after merge");
   }
 
-  const uint32_t vertex_count = static_cast<uint32_t>(vertices.size() / 3);
-  const uint32_t index_count = static_cast<uint32_t>(indices.size());
+  const uint32_t vertex_count = static_cast<uint32_t>(geom.vertices.size() / 3);
+  const uint32_t index_count = static_cast<uint32_t>(geom.indices.size());
   std::cout << "Geometry: " << vertex_count << " verts, " << (index_count / 3) << " tris, "
-            << scene.materials.size() << " materials, " << scene.lights.size() << " lights\n";
+            << scene.materials.size() << " materials, " << scene.lights.size() << " lights, "
+            << scene.textures.size() << " textures"
+            << (scene.env_map.empty() ? "" : ", HDRI") << "\n";
 
-  auto usage_storage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                       VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+  auto usage_as_input = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
-  Buffer vertex_buf = ctx.create_buffer(vertices.size() * sizeof(float), usage_storage,
+  Buffer vertex_buf = ctx.create_buffer(geom.vertices.size() * sizeof(float), usage_as_input,
                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(vertex_buf, vertices.data(), vertices.size() * sizeof(float));
+  ctx.upload(vertex_buf, geom.vertices.data(), geom.vertices.size() * sizeof(float));
 
-  Buffer index_buf = ctx.create_buffer(indices.size() * sizeof(uint32_t), usage_storage,
+  Buffer index_buf = ctx.create_buffer(geom.indices.size() * sizeof(uint32_t), usage_as_input,
                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(index_buf, indices.data(), indices.size() * sizeof(uint32_t));
+  ctx.upload(index_buf, geom.indices.data(), geom.indices.size() * sizeof(uint32_t));
 
-  Buffer mat_id_buf = ctx.create_buffer(mat_ids.size() * sizeof(int32_t),
-                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                            VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(mat_id_buf, mat_ids.data(), mat_ids.size() * sizeof(int32_t));
+  Buffer mat_id_buf =
+      upload_storage(ctx, geom.mat_ids.data(), geom.mat_ids.size() * sizeof(int32_t));
+  Buffer texcoord_buf =
+      upload_storage(ctx, geom.texcoords.data(), geom.texcoords.size() * sizeof(float));
+  Buffer normal_buf = upload_storage(ctx, geom.normals.data(), geom.normals.size() * sizeof(float));
+  Buffer tangent_buf =
+      upload_storage(ctx, geom.tangents.data(), geom.tangents.size() * sizeof(float));
 
   std::vector<MaterialGPUHost> mats(scene.materials.size());
   for (size_t i = 0; i < scene.materials.size(); ++i) {
@@ -1152,16 +1212,13 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     mats[i].roughness = m.roughness;
     mats[i].transmission = m.transmission;
     mats[i].ior = m.ior;
-    set3(mats[i].emission, m.emission);
-    set3(mats[i].absorption, m.absorption);
     mats[i].flags = m.flags;
+    set3(mats[i].emission, m.emission);
+    mats[i].albedo_tex = m.albedo_tex;
+    set3(mats[i].absorption, m.absorption);
+    mats[i].normal_tex = m.normal_tex;
   }
-  Buffer mat_buf = ctx.create_buffer(mats.size() * sizeof(MaterialGPUHost),
-                                     VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                         VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(mat_buf, mats.data(), mats.size() * sizeof(MaterialGPUHost));
+  Buffer mat_buf = upload_storage(ctx, mats.data(), mats.size() * sizeof(MaterialGPUHost));
 
   std::vector<QuadLightHost> lights(std::max<size_t>(scene.lights.size(), 1));
   if (scene.lights.empty()) {
@@ -1178,12 +1235,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
       lights[i].use_mis = L.use_mis;
     }
   }
-  Buffer light_buf = ctx.create_buffer(lights.size() * sizeof(QuadLightHost),
-                                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                           VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(light_buf, lights.data(), lights.size() * sizeof(QuadLightHost));
+  Buffer light_buf = upload_storage(ctx, lights.data(), lights.size() * sizeof(QuadLightHost));
 
   std::vector<SpotLightHost> spots(std::max<size_t>(scene.spot_lights.size(), 1));
   if (scene.spot_lights.empty()) {
@@ -1199,12 +1251,55 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
       spots[i].cos_outer = S.cos_outer;
     }
   }
-  Buffer spot_buf = ctx.create_buffer(spots.size() * sizeof(SpotLightHost),
-                                      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                          VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(spot_buf, spots.data(), spots.size() * sizeof(SpotLightHost));
+  Buffer spot_buf = upload_storage(ctx, spots.data(), spots.size() * sizeof(SpotLightHost));
+
+  // HDRI env map
+  std::vector<float> env_rgb(3, 0.f);
+  std::vector<float> env_cdf(1, 0.f);
+  std::vector<float> env_row(1, 0.f);
+  if (!scene.env_map.empty()) {
+    env_rgb.resize(static_cast<size_t>(scene.env_map.width) * scene.env_map.height * 3);
+    for (size_t i = 0; i < scene.env_map.pixels.size(); ++i) {
+      env_rgb[i * 3 + 0] = scene.env_map.pixels[i].x;
+      env_rgb[i * 3 + 1] = scene.env_map.pixels[i].y;
+      env_rgb[i * 3 + 2] = scene.env_map.pixels[i].z;
+    }
+    env_cdf = scene.env_map.cdf;
+    env_row = scene.env_map.row_cdf;
+    std::cout << "Env map: " << scene.env_map.width << "x" << scene.env_map.height << "\n";
+  }
+  Buffer env_pix_buf = upload_storage(ctx, env_rgb.data(), env_rgb.size() * sizeof(float));
+  Buffer env_cdf_buf = upload_storage(ctx, env_cdf.data(), env_cdf.size() * sizeof(float));
+  Buffer env_row_buf = upload_storage(ctx, env_row.data(), env_row.size() * sizeof(float));
+
+  // Albedo/normal textures: pack RGBA8 into uint buffer + descriptor table
+  std::vector<TextureDescHost> tex_descs(std::max<size_t>(scene.textures.size(), 1));
+  std::vector<uint32_t> tex_pixels(1, 0xffffffffu);
+  if (!scene.textures.empty()) {
+    tex_descs.resize(scene.textures.size());
+    tex_pixels.clear();
+    for (size_t i = 0; i < scene.textures.size(); ++i) {
+      const Texture2D &tex = scene.textures[i];
+      tex_descs[i].offset = static_cast<int32_t>(tex_pixels.size());
+      tex_descs[i].width = tex.width;
+      tex_descs[i].height = tex.height;
+      tex_descs[i].pad = 0;
+      const size_t n = static_cast<size_t>(tex.width) * tex.height;
+      for (size_t p = 0; p < n; ++p) {
+        const uint32_t r = tex.rgba[p * 4 + 0];
+        const uint32_t g = tex.rgba[p * 4 + 1];
+        const uint32_t b = tex.rgba[p * 4 + 2];
+        const uint32_t a = tex.rgba[p * 4 + 3];
+        tex_pixels.push_back(r | (g << 8) | (b << 16) | (a << 24));
+      }
+    }
+    std::cout << "Textures: " << scene.textures.size() << " (" << tex_pixels.size() << " texels)\n";
+  } else {
+    std::memset(tex_descs.data(), 0, sizeof(TextureDescHost));
+  }
+  Buffer tex_desc_buf =
+      upload_storage(ctx, tex_descs.data(), tex_descs.size() * sizeof(TextureDescHost));
+  Buffer tex_pix_buf = upload_storage(ctx, tex_pixels.data(), tex_pixels.size() * sizeof(uint32_t));
 
   AccelerationStructure blas = ctx.build_blas(vertex_buf, vertex_count, index_buf, index_count);
   AccelerationStructure tlas = ctx.build_tlas(blas);
@@ -1231,12 +1326,20 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   lp.light_count = static_cast<int32_t>(scene.lights.size());
   lp.spot_count = static_cast<int32_t>(scene.spot_lights.size());
   lp.enable_nee = config.enable_nee ? 1 : 0;
+  lp.has_env = scene.env_map.empty() ? 0 : 1;
+  lp.env_width = scene.env_map.width;
+  lp.env_height = scene.env_map.height;
+  lp.env_total_lum = scene.env_map.total_luminance;
+  lp.texture_count = static_cast<int32_t>(scene.textures.size());
   set3(lp.background_top, scene.background_top);
   set3(lp.background_bottom, scene.background_bottom);
   lp.camera = make_camera_gpu(camera);
 
-  ctx.update_descriptors(tlas, accum, params_buf, vertex_buf, index_buf, mat_buf, mat_id_buf,
-                         light_buf, spot_buf);
+  std::array<const Buffer *, 15> ssbos = {&params_buf,   &vertex_buf,  &index_buf,   &mat_buf,
+                                          &mat_id_buf,   &light_buf,   &spot_buf,    &texcoord_buf,
+                                          &normal_buf,   &tangent_buf, &env_pix_buf, &env_cdf_buf,
+                                          &env_row_buf,  &tex_desc_buf, &tex_pix_buf};
+  ctx.update_descriptors(tlas, accum, ssbos);
 
   const int spp = std::max(1, config.spp);
   const int spl = lp.samples_per_launch;
@@ -1263,13 +1366,22 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   ctx.destroy_as(tlas);
   ctx.destroy_as(blas);
   ctx.destroy_image(accum);
-  ctx.destroy_buffer(params_buf);
-  ctx.destroy_buffer(vertex_buf);
-  ctx.destroy_buffer(index_buf);
-  ctx.destroy_buffer(mat_buf);
-  ctx.destroy_buffer(mat_id_buf);
-  ctx.destroy_buffer(light_buf);
-  ctx.destroy_buffer(spot_buf);
+  auto destroy_all = [&](Buffer &b) { ctx.destroy_buffer(b); };
+  destroy_all(params_buf);
+  destroy_all(vertex_buf);
+  destroy_all(index_buf);
+  destroy_all(mat_buf);
+  destroy_all(mat_id_buf);
+  destroy_all(light_buf);
+  destroy_all(spot_buf);
+  destroy_all(texcoord_buf);
+  destroy_all(normal_buf);
+  destroy_all(tangent_buf);
+  destroy_all(env_pix_buf);
+  destroy_all(env_cdf_buf);
+  destroy_all(env_row_buf);
+  destroy_all(tex_desc_buf);
+  destroy_all(tex_pix_buf);
 }
 
 #else // !LUMENCORE_HAS_VULKAN
