@@ -84,6 +84,15 @@ struct QuadLightHost {
   int32_t pad5;
 };
 
+struct SpotLightHost {
+  float position[3];
+  float pad0;
+  float direction[3];
+  float cos_inner;
+  float emission[3];
+  float cos_outer;
+};
+
 struct VulkanLaunchParams {
   uint64_t tlas; // unused in shader; AS is a descriptor
   int32_t width;
@@ -93,7 +102,9 @@ struct VulkanLaunchParams {
   int32_t max_depth;
   int32_t material_count;
   int32_t light_count;
+  int32_t spot_count;
   int32_t enable_nee;
+  int32_t pad_flags;
   float background_top[3];
   float pad0;
   float background_bottom[3];
@@ -103,6 +114,7 @@ struct VulkanLaunchParams {
 
 static_assert(sizeof(MaterialGPUHost) == 64, "MaterialGPUHost layout");
 static_assert(sizeof(QuadLightHost) == 80, "QuadLightHost layout");
+static_assert(sizeof(SpotLightHost) == 48, "SpotLightHost layout");
 
 void set3(float *d, const float3 &v) {
   d[0] = v.x;
@@ -573,7 +585,8 @@ struct VulkanRT {
     VkAccelerationStructureGeometryKHR geometry{};
     geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
     geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-    geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    // Non-opaque so shadow anyhit can skip glass (radiance rays use Opaque flag).
+    geometry.flags = 0;
     geometry.geometry.triangles = tri;
 
     VkAccelerationStructureBuildGeometryInfoKHR build_info{};
@@ -720,23 +733,24 @@ struct VulkanRT {
   }
 
   void create_pipeline() {
-    // Descriptor set layout: AS, storage image, params, vertices, indices, materials, mat_ids, lights
-    std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
+    // Descriptor set: AS, image, params, verts, idx, mats, mat_ids, lights, spots
+    const VkShaderStageFlags rt_stages =
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+        VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    std::array<VkDescriptorSetLayoutBinding, 9> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     bindings[0].descriptorCount = 1;
-    bindings[0].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-                             VK_SHADER_STAGE_MISS_BIT_KHR;
+    bindings[0].stageFlags = rt_stages;
     bindings[1].binding = 1;
     bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    for (uint32_t i = 2; i < 8; ++i) {
+    for (uint32_t i = 2; i < 9; ++i) {
       bindings[i].binding = i;
       bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bindings[i].descriptorCount = 1;
-      bindings[i].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-                               VK_SHADER_STAGE_MISS_BIT_KHR;
+      bindings[i].stageFlags = rt_stages;
     }
 
     VkDescriptorSetLayoutCreateInfo dslci{};
@@ -755,8 +769,9 @@ struct VulkanRT {
     VkShaderModule rmiss = load_shader(find_spv("path_trace.rmiss.spv"));
     VkShaderModule rmiss_shadow = load_shader(find_spv("path_trace_shadow.rmiss.spv"));
     VkShaderModule rchit = load_shader(find_spv("path_trace.rchit.spv"));
+    VkShaderModule rahit = load_shader(find_spv("path_trace.rahit.spv"));
 
-    std::array<VkPipelineShaderStageCreateInfo, 4> stages{};
+    std::array<VkPipelineShaderStageCreateInfo, 5> stages{};
     stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[0].stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     stages[0].module = rgen;
@@ -773,8 +788,12 @@ struct VulkanRT {
     stages[3].stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     stages[3].module = rchit;
     stages[3].pName = "main";
+    stages[4].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[4].stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    stages[4].module = rahit;
+    stages[4].pName = "main";
 
-    // Groups: 0=rgen, 1=miss radiance, 2=miss shadow, 3=hitgroup chit
+    // Groups: 0=rgen, 1=miss radiance, 2=miss shadow, 3=hitgroup chit+ahit
     std::array<VkRayTracingShaderGroupCreateInfoKHR, 4> groups{};
     for (auto &g : groups) {
       g.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -791,6 +810,7 @@ struct VulkanRT {
     groups[2].generalShader = 2;
     groups[3].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
     groups[3].closestHitShader = 3;
+    groups[3].anyHitShader = 4;
 
     VkRayTracingPipelineCreateInfoKHR pci{};
     pci.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
@@ -807,6 +827,7 @@ struct VulkanRT {
     vkDestroyShaderModule(device, rmiss, nullptr);
     vkDestroyShaderModule(device, rmiss_shadow, nullptr);
     vkDestroyShaderModule(device, rchit, nullptr);
+    vkDestroyShaderModule(device, rahit, nullptr);
 
     // SBT
     const uint32_t handle_size = rt_props.shaderGroupHandleSize;
@@ -861,7 +882,7 @@ struct VulkanRT {
     std::array<VkDescriptorPoolSize, 3> pool_sizes{};
     pool_sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
     pool_sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1};
-    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6};
+    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7};
     VkDescriptorPoolCreateInfo dpci{};
     dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     dpci.maxSets = 1;
@@ -880,13 +901,13 @@ struct VulkanRT {
   void update_descriptors(const AccelerationStructure &tlas, const Image &accum,
                           const Buffer &params_buf, const Buffer &vertex_buf,
                           const Buffer &index_buf, const Buffer &mat_buf, const Buffer &mat_id_buf,
-                          const Buffer &light_buf) {
+                          const Buffer &light_buf, const Buffer &spot_buf) {
     VkWriteDescriptorSetAccelerationStructureKHR as_info{};
     as_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     as_info.accelerationStructureCount = 1;
     as_info.pAccelerationStructures = &tlas.handle;
 
-    std::array<VkWriteDescriptorSet, 8> writes{};
+    std::array<VkWriteDescriptorSet, 9> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext = &as_info;
     writes[0].dstSet = desc_set;
@@ -904,23 +925,10 @@ struct VulkanRT {
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     writes[1].pImageInfo = &img_info;
 
-    auto bind_buf = [&](uint32_t binding, const Buffer &b) {
-      VkDescriptorBufferInfo bi{};
-      bi.buffer = b.buffer;
-      bi.offset = 0;
-      bi.range = VK_WHOLE_SIZE;
-      writes[binding].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      writes[binding].dstSet = desc_set;
-      writes[binding].dstBinding = binding;
-      writes[binding].descriptorCount = 1;
-      writes[binding].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      // Need stable storage — use temporary array outside
-      (void)bi;
-    };
-    // Need buffer infos with stable lifetime
-    std::array<VkDescriptorBufferInfo, 6> bis{};
-    const Buffer *bufs[6] = {&params_buf, &vertex_buf, &index_buf, &mat_buf, &mat_id_buf, &light_buf};
-    for (uint32_t i = 0; i < 6; ++i) {
+    std::array<VkDescriptorBufferInfo, 7> bis{};
+    const Buffer *bufs[7] = {&params_buf, &vertex_buf, &index_buf, &mat_buf,
+                             &mat_id_buf, &light_buf,  &spot_buf};
+    for (uint32_t i = 0; i < 7; ++i) {
       bis[i].buffer = bufs[i]->buffer;
       bis[i].offset = 0;
       bis[i].range = VK_WHOLE_SIZE;
@@ -931,7 +939,6 @@ struct VulkanRT {
       writes[i + 2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       writes[i + 2].pBufferInfo = &bis[i];
     }
-    (void)bind_buf;
     vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
   }
 
@@ -1099,7 +1106,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     throw std::runtime_error("Vulkan backend: scene has no materials");
   }
 
-  std::cout << "Backend: vulkan (Phase 1 path tracer)\n";
+  std::cout << "Backend: vulkan (Phase 2a path tracer: GGX + spot NEE + glass shadow skip)\n";
   VulkanRT ctx;
   ctx.init();
   ctx.create_pipeline();
@@ -1178,6 +1185,27 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   ctx.upload(light_buf, lights.data(), lights.size() * sizeof(QuadLightHost));
 
+  std::vector<SpotLightHost> spots(std::max<size_t>(scene.spot_lights.size(), 1));
+  if (scene.spot_lights.empty()) {
+    std::memset(spots.data(), 0, sizeof(SpotLightHost));
+  } else {
+    spots.resize(scene.spot_lights.size());
+    for (size_t i = 0; i < scene.spot_lights.size(); ++i) {
+      const SpotLight &S = scene.spot_lights[i];
+      set3(spots[i].position, S.position);
+      set3(spots[i].direction, S.direction);
+      set3(spots[i].emission, S.emission);
+      spots[i].cos_inner = S.cos_inner;
+      spots[i].cos_outer = S.cos_outer;
+    }
+  }
+  Buffer spot_buf = ctx.create_buffer(spots.size() * sizeof(SpotLightHost),
+                                      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                          VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  ctx.upload(spot_buf, spots.data(), spots.size() * sizeof(SpotLightHost));
+
   AccelerationStructure blas = ctx.build_blas(vertex_buf, vertex_count, index_buf, index_count);
   AccelerationStructure tlas = ctx.build_tlas(blas);
 
@@ -1201,13 +1229,14 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   lp.max_depth = std::max(1, config.max_depth);
   lp.material_count = static_cast<int32_t>(scene.materials.size());
   lp.light_count = static_cast<int32_t>(scene.lights.size());
+  lp.spot_count = static_cast<int32_t>(scene.spot_lights.size());
   lp.enable_nee = config.enable_nee ? 1 : 0;
   set3(lp.background_top, scene.background_top);
   set3(lp.background_bottom, scene.background_bottom);
   lp.camera = make_camera_gpu(camera);
 
   ctx.update_descriptors(tlas, accum, params_buf, vertex_buf, index_buf, mat_buf, mat_id_buf,
-                         light_buf);
+                         light_buf, spot_buf);
 
   const int spp = std::max(1, config.spp);
   const int spl = lp.samples_per_launch;
@@ -1240,6 +1269,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   ctx.destroy_buffer(mat_buf);
   ctx.destroy_buffer(mat_id_buf);
   ctx.destroy_buffer(light_buf);
+  ctx.destroy_buffer(spot_buf);
 }
 
 #else // !LUMENCORE_HAS_VULKAN

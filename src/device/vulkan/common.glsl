@@ -1,4 +1,4 @@
-// Shared GLSL definitions for LumenCore Vulkan RT path tracer (Phase 1).
+// Shared GLSL definitions for LumenCore Vulkan RT path tracer (Phase 1–2).
 #ifndef LUMENCORE_VK_COMMON_GLSL
 #define LUMENCORE_VK_COMMON_GLSL
 
@@ -56,6 +56,15 @@ struct QuadLight {
   int pad5;
 };
 
+struct SpotLight {
+  vec3 position;
+  float pad0;
+  vec3 direction;
+  float cos_inner;
+  vec3 emission;
+  float cos_outer;
+};
+
 // std430-friendly scene params (matches host VulkanLaunchParams).
 struct LaunchParams {
   uint64_t tlas; // unused in shader (bound as AS); keep layout sync
@@ -66,7 +75,9 @@ struct LaunchParams {
   int max_depth;
   int material_count;
   int light_count;
+  int spot_count;
   int enable_nee;
+  int pad_flags;
   vec3 background_top;
   float pad0;
   vec3 background_bottom;

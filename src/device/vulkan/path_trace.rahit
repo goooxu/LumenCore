@@ -1,0 +1,34 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "common.glsl"
+
+// Shadow any-hit: skip glass/transmission so NEE is not blocked by dielectrics
+// (matches OptiX shadow that ignores glass). Radiance rays use Opaque flags and skip this.
+
+layout(binding = 2, set = 0, scalar) readonly buffer ParamsBuf {
+  LaunchParams params;
+};
+
+layout(binding = 5, set = 0, scalar) readonly buffer Materials {
+  MaterialGPU materials[];
+};
+
+layout(binding = 6, set = 0, scalar) readonly buffer MaterialIds {
+  int material_ids[];
+};
+
+void main() {
+  int mid = material_ids[gl_PrimitiveID];
+  if (mid < 0 || mid >= params.material_count) {
+    mid = 0;
+  }
+  if (materials[mid].transmission > 0.5) {
+    ignoreIntersectionEXT;
+  }
+  // Opaque: accept and end search (terminate-on-first shadow rays).
+  terminateRayEXT;
+}

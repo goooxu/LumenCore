@@ -75,7 +75,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 ## Features
 
 - **PhysX 5 + OptiX 9** — GPU PhysX rigid bodies (required) + OptiX path tracing (`PhysXWorld` → poses → **IAS instances** → path tracer)
-- **Dual render backends (migration)** — `RenderConfig.backend = "optix"` (default, full OptiX path tracer) or `"vulkan"` (Phase 1: Vulkan RT path tracer — BLAS/TLAS, Lambert/metal/glass, area-light NEE; no denoiser/HDRI/volumes yet)
+- **Dual render backends (migration)** — `RenderConfig.backend = "optix"` (default, full OptiX path tracer) or `"vulkan"` (Phase 2a: Vulkan RT — GGX + glass + quad/spot NEE + MIS; no denoiser/HDRI/textures/volumes yet)
 - **Procedural flame volumes** — `Scene.add_flame_volume` (noise density, ray-marched emission, NEE proxy light)
 - **Python scene API** (`import lumencore`) — each demo is a Python script
 - Unidirectional path tracing + Next Event Estimation (quad area lights + spot lights + HDRI)

@@ -132,11 +132,13 @@ endif()
 set(NRTX_VK_SPV_OUTPUTS "")
 if(GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
   # stage:source pairs
+  set(NRTX_VK_BSDF_GLSL ${NRTX_VK_SHADER_DIR}/bsdf.glsl)
   set(_NRTX_VK_SHADERS
     "rgen:path_trace.rgen"
     "rmiss:path_trace.rmiss"
     "rmiss:path_trace_shadow.rmiss"
     "rchit:path_trace.rchit"
+    "rahit:path_trace.rahit"
   )
   foreach(_entry ${_NRTX_VK_SHADERS})
     string(REPLACE ":" ";" _pair "${_entry}")
@@ -153,7 +155,7 @@ if(GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
         -I${NRTX_VK_SHADER_DIR}
         ${_src}
         -o ${_spv}
-      DEPENDS ${_src} ${NRTX_VK_COMMON_GLSL}
+      DEPENDS ${_src} ${NRTX_VK_COMMON_GLSL} ${NRTX_VK_BSDF_GLSL}
       COMMENT "Compiling Vulkan RT shader ${_src_name} → SPIR-V"
       VERBATIM
     )

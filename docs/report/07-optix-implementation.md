@@ -7,7 +7,7 @@
 | 值 | 行为 |
 |----|------|
 | `"optix"`（默认） | 本章所述完整路径追踪 + OptiX Denoiser |
-| `"vulkan"` | **Phase 1**：Vulkan RT 路径追踪（BLAS/TLAS + GLSL rgen/rmiss/rchit）；Lambert / metal / glass + 面积光 NEE；**尚无** Denoiser / HDRI / 体积 / 完整 GGX MIS |
+| `"vulkan"` | **Phase 2a**：Vulkan RT（BLAS/TLAS + GLSL）；GGX VNDF opaque + 微面玻璃 + quad/spot NEE + `use_mis` MIS；shadow anyhit 跳过玻璃；**尚无** Denoiser / HDRI / 纹理 / 体积 / IAS 实例 |
 
 构建开关：`LUMENCORE_ENABLE_VULKAN`（找到 Vulkan 时定义 `LUMENCORE_HAS_VULKAN`）。Python：`lumencore.vulkan_backend_available()`。SPIR-V 由 CMake/`glslangValidator` 从 `src/device/vulkan/` 编译，运行时 `NRTX_VK_SPV_DIR` 指向输出目录。
 
