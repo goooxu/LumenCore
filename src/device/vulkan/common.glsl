@@ -103,9 +103,11 @@ struct LaunchParams {
 struct HitPayload {
   vec3 radiance; // miss: env Le
   vec3 hit_pos;
-  vec3 hit_normal; // shading normal (world)
-  vec3 base_color; // textured
+  vec3 hit_normal;      // shading normal (world)
+  vec3 hit_geom_normal; // geometric face normal (world)
+  vec3 base_color;      // textured
   vec3 emission;
+  vec3 absorption;      // Beer–Lambert sigma_a (for dielectric medium)
   float metallic;
   float roughness;
   float transmission;
@@ -114,6 +116,14 @@ struct HitPayload {
   int hit;
   uint seed;
 };
+
+vec3 beer_attenuate(vec3 sigma, float dist) {
+  return vec3(exp(-sigma.x * dist), exp(-sigma.y * dist), exp(-sigma.z * dist));
+}
+
+bool medium_active(vec3 sigma) {
+  return sigma.x > 0.0 || sigma.y > 0.0 || sigma.z > 0.0;
+}
 
 struct ShadowPayload {
   uint visible;

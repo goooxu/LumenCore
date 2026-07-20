@@ -1167,7 +1167,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     throw std::runtime_error("Vulkan backend: scene has no materials");
   }
 
-  std::cout << "Backend: vulkan (Phase 2b: GGX + HDRI + textures)\n";
+  std::cout << "Backend: vulkan (Phase 2c: GGX + HDRI + textures + Beer medium)\n";
   VulkanRT ctx;
   ctx.init();
   ctx.create_pipeline();

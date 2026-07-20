@@ -111,6 +111,7 @@ void main() {
     vec3 radiance = vec3(0.0);
     float last_pdf = 0.0;
     vec3 prev_origin = origin;
+    vec3 medium_sigma = vec3(0.0);
 
     for (int depth = 0; depth < params.max_depth; ++depth) {
       payload.hit = 0;
@@ -123,7 +124,10 @@ void main() {
       seed = payload.seed;
 
       if (payload.hit == 0) {
-        // Environment miss + optional MIS with last BSDF pdf
+        // Beer absorption along miss (cap so underwater sky is tinted but finite)
+        if (medium_active(medium_sigma)) {
+          throughput *= beer_attenuate(medium_sigma, 20.0);
+        }
         float mis_w = 1.0;
         if (params.has_env != 0 && params.enable_nee != 0 && depth > 0 && last_pdf > 1e-8) {
           float pdf_env = pdf_env_map(direction);
@@ -133,16 +137,31 @@ void main() {
         break;
       }
 
-      vec3 n_geom = payload.hit_normal;
+      // Path segment absorption before shading (OptiX apply_medium_absorption)
+      float t_hit = max(payload.t_hit, 0.0);
+      if (medium_active(medium_sigma) && t_hit > 0.0) {
+        throughput *= beer_attenuate(medium_sigma, t_hit);
+      }
+
+      vec3 ng_geom = normalize(payload.hit_geom_normal);
+      vec3 ng = normalize(payload.hit_normal);
+      // Keep shading normal on same hemisphere as geometric
+      if (dot(ng, ng_geom) < 0.0) {
+        ng = -ng;
+      }
       vec3 p = payload.hit_pos;
+      // Face classification uses geometric normal (open water / glass slabs)
+      bool front_facing = dot(direction, ng_geom) < 0.0;
+      vec3 n = front_facing ? ng : -ng;
       vec3 wo = -direction;
-      vec3 n = n_geom;
-      if (payload.transmission <= 0.5 && dot(n, wo) < 0.0) {
+
+      // Opaque two-sided: force n toward wo when not glass
+      bool is_glass = payload.transmission > 0.5;
+      if (!is_glass && dot(n, wo) < 0.0) {
         n = -n;
       }
 
       bool is_emissive = luminance(payload.emission) > 0.0;
-      bool is_glass = payload.transmission > 0.5;
 
       if (is_emissive) {
         float mis_w = 1.0;
@@ -156,7 +175,7 @@ void main() {
         break;
       }
 
-      // NEE: area + spot + HDRI
+      // NEE: opaque only; glass is BSDF-only. Medium Tr on NEE segment.
       if (params.enable_nee != 0 && !is_glass) {
         int total_lights = params.light_count + params.spot_count;
         if (total_lights > 0) {
@@ -173,15 +192,16 @@ void main() {
             float cos_light = abs(dot(lnormal, -to_light));
             float cos_surf = dot(n, to_light);
             if (cos_surf > 0.0 && cos_light > 0.0 && pdf_area > 0.0) {
-              if (visibility(offset_ray_origin(p, n_geom * sign(dot(n_geom, to_light))), to_light,
+              if (visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, to_light))), to_light,
                              dist - 2.0 * TMIN) > 0.5) {
                 float pdf_light = pdf_area * dist2 / (cos_light * float(total_lights));
                 float pdf_bsdf = 0.0;
                 vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness, n,
                                           wo, to_light, pdf_bsdf);
                 float w = (light.use_mis != 0) ? mis_balance(pdf_light, pdf_bsdf) : 1.0;
-                radiance +=
-                    throughput * f * light.emission * (cos_surf * w / max(pdf_light, 1e-8));
+                vec3 Tr = medium_active(medium_sigma) ? beer_attenuate(medium_sigma, dist) : vec3(1.0);
+                radiance += throughput * Tr * f * light.emission *
+                            (cos_surf * w / max(pdf_light, 1e-8));
               }
             }
           } else {
@@ -196,28 +216,29 @@ void main() {
               if (cos_surf > 0.0 && cos_aim > spot.cos_outer) {
                 float cone = smoothstep_cone(spot.cos_outer, spot.cos_inner, cos_aim);
                 if (cone > 0.0 &&
-                    visibility(offset_ray_origin(p, n_geom * sign(dot(n_geom, to_light))), to_light,
+                    visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, to_light))), to_light,
                                dist - 2.0 * TMIN) > 0.5) {
                   float pdf_light = 1.0 / float(total_lights);
                   float pdf_bsdf = 0.0;
                   vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness,
                                             n, wo, to_light, pdf_bsdf);
                   vec3 Le = spot.emission * (cone / dist2);
-                  radiance += throughput * f * Le * (cos_surf / max(pdf_light, 1e-8));
+                  vec3 Tr = medium_active(medium_sigma) ? beer_attenuate(medium_sigma, dist) : vec3(1.0);
+                  radiance += throughput * Tr * f * Le * (cos_surf / max(pdf_light, 1e-8));
                 }
               }
             }
           }
         }
 
-        // HDRI next-event estimation
-        if (params.has_env != 0) {
+        // HDRI NEE: skip while inside medium (infinite distance)
+        if (params.has_env != 0 && !medium_active(medium_sigma)) {
           vec3 wi_env;
           float pdf_env = 0.0;
           vec3 Le = sample_env_map(seed, wi_env, pdf_env);
           float cos_surf = dot(n, wi_env);
           if (cos_surf > 0.0 && pdf_env > 1e-8 && luminance(Le) > 0.0) {
-            if (visibility(offset_ray_origin(p, n_geom * sign(dot(n_geom, wi_env))), wi_env, TMAX) >
+            if (visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, wi_env))), wi_env, TMAX) >
                 0.5) {
               float pdf_bsdf = 0.0;
               vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness, n,
@@ -238,22 +259,22 @@ void main() {
       samp.wi = vec3(0.0);
 
       if (is_glass) {
-        bool entering = dot(direction, n_geom) < 0.0;
-        vec3 ng = entering ? n_geom : -n_geom;
-        samp = sample_dielectric_bsdf(seed, payload.base_color, payload.roughness, payload.ior, ng,
-                                      -direction, entering);
+        // Dielectric: front_facing from geometric normal; BSDF along shading n hemisphere
+        samp = sample_dielectric_bsdf(seed, payload.base_color, payload.roughness, payload.ior, n, wo,
+                                      front_facing);
         if (!samp.valid) {
           break;
         }
-        throughput *= samp.f;
+        throughput *= samp.f; // MC weight already includes cos/pdf
         last_pdf = 0.0;
-        vec3 nl = entering ? n_geom : -n_geom;
         if (samp.transmitted) {
-          origin = offset_ray_origin(p, -nl);
-        } else {
-          origin = offset_ray_origin(p, nl);
+          // Enter medium on front-facing transmission; exit on back-face
+          if (front_facing) {
+            medium_sigma = payload.absorption;
+          } else {
+            medium_sigma = vec3(0.0);
+          }
         }
-        direction = samp.wi;
       } else {
         samp = sample_opaque_bsdf(seed, payload.base_color, payload.metallic, payload.roughness, n,
                                   wo);
@@ -263,9 +284,12 @@ void main() {
         float cos_i = max(dot(n, samp.wi), 0.0);
         throughput *= samp.f * cos_i / max(samp.pdf, 1e-8);
         last_pdf = samp.pdf;
-        origin = offset_ray_origin(p, n);
-        direction = samp.wi;
       }
+
+      // Offset along geometric normal toward outgoing direction (handles transmission)
+      vec3 n_off = ng_geom * (dot(samp.wi, ng_geom) >= 0.0 ? 1.0 : -1.0);
+      origin = offset_ray_origin(p, n_off);
+      direction = samp.wi;
 
       if (depth >= 3) {
         float q = clamp(luminance(throughput), 0.05, 0.95);

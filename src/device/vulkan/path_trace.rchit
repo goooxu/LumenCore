@@ -68,6 +68,7 @@ void main() {
 
   vec3 world_pos = (gl_ObjectToWorldEXT * vec4(obj_pos, 1.0)).xyz;
   vec3 world_n = normalize((gl_ObjectToWorldEXT * vec4(n_obj, 0.0)).xyz);
+  vec3 world_ng = normalize((gl_ObjectToWorldEXT * vec4(ng_obj, 0.0)).xyz);
 
   vec3 base = mat.base_color;
   if (mat.albedo_tex >= 0) {
@@ -77,8 +78,10 @@ void main() {
   payload.hit = 1;
   payload.hit_pos = world_pos;
   payload.hit_normal = world_n;
+  payload.hit_geom_normal = world_ng;
   payload.base_color = base;
   payload.emission = mat.emission;
+  payload.absorption = mat.absorption;
   payload.metallic = mat.metallic;
   payload.roughness = mat.roughness;
   payload.transmission = mat.transmission;
