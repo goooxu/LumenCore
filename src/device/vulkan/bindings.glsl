@@ -6,6 +6,8 @@
 
 layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 0, rgba32f) uniform image2D accumImage;
+layout(binding = 19, set = 0, rgba32f) uniform image2D albedoImage;
+layout(binding = 20, set = 0, rgba32f) uniform image2D normalImage;
 
 layout(binding = 2, set = 0, scalar) readonly buffer ParamsBuf {
   LaunchParams params;

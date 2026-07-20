@@ -52,6 +52,7 @@ add_library(nrtx_host
   src/host/physx_world.cpp
   src/host/renderer.cpp
   src/host/vulkan_renderer.cpp
+  src/host/optix_denoise.cpp
   src/host/env_map.cpp
   src/host/image_io.cpp
 )

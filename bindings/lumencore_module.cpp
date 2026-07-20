@@ -171,6 +171,8 @@ PYBIND11_MODULE(lumencore, m) {
 
   m.def("vulkan_backend_available", &vulkan_backend_available,
         "True if this build was configured with LUMENCORE_ENABLE_VULKAN");
+  m.def("vulkan_denoise_available", &vulkan_denoise_available,
+        "True if backend=vulkan can denoise (OptiX Denoiser post-process)");
 
   py::class_<Mesh>(m, "Mesh").def(py::init<>());
 

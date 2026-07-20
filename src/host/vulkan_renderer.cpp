@@ -765,8 +765,8 @@ struct VulkanRT {
   }
 
   void create_pipeline() {
-    // 0 AS, 1 image, 2 params, 3-16 geom/env/tex, 17 mesh ranges, 18 volumes
-    constexpr uint32_t kBindings = 19;
+    // 0 AS, 1 beauty, 2-18 SSBOs, 19 albedo AOV, 20 normal AOV
+    constexpr uint32_t kBindings = 21;
     const VkShaderStageFlags rt_stages =
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
@@ -775,11 +775,13 @@ struct VulkanRT {
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     bindings[0].descriptorCount = 1;
     bindings[0].stageFlags = rt_stages;
-    bindings[1].binding = 1;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    bindings[1].descriptorCount = 1;
-    bindings[1].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    for (uint32_t i = 2; i < kBindings; ++i) {
+    for (uint32_t img_b : {1u, 19u, 20u}) {
+      bindings[img_b].binding = img_b;
+      bindings[img_b].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      bindings[img_b].descriptorCount = 1;
+      bindings[img_b].stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    }
+    for (uint32_t i = 2; i <= 18; ++i) {
       bindings[i].binding = i;
       bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       bindings[i].descriptorCount = 1;
@@ -914,7 +916,7 @@ struct VulkanRT {
     // Descriptor pool
     std::array<VkDescriptorPoolSize, 3> pool_sizes{};
     pool_sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
-    pool_sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1};
+    pool_sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3};
     pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 17};
     VkDescriptorPoolCreateInfo dpci{};
     dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -932,13 +934,14 @@ struct VulkanRT {
   }
 
   void update_descriptors(const AccelerationStructure &tlas, const Image &accum,
+                          const Image &albedo, const Image &normal,
                           const std::array<const Buffer *, 17> &ssbos) {
     VkWriteDescriptorSetAccelerationStructureKHR as_info{};
     as_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     as_info.accelerationStructureCount = 1;
     as_info.pAccelerationStructures = &tlas.handle;
 
-    std::array<VkWriteDescriptorSet, 19> writes{};
+    std::array<VkWriteDescriptorSet, 21> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext = &as_info;
     writes[0].dstSet = desc_set;
@@ -946,15 +949,19 @@ struct VulkanRT {
     writes[0].descriptorCount = 1;
     writes[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
-    VkDescriptorImageInfo img_info{};
-    img_info.imageView = accum.view;
-    img_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[1].dstSet = desc_set;
-    writes[1].dstBinding = 1;
-    writes[1].descriptorCount = 1;
-    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    writes[1].pImageInfo = &img_info;
+    std::array<VkDescriptorImageInfo, 3> img_infos{};
+    const Image *imgs[3] = {&accum, &albedo, &normal};
+    const uint32_t img_bindings[3] = {1, 19, 20};
+    for (int i = 0; i < 3; ++i) {
+      img_infos[i].imageView = imgs[i]->view;
+      img_infos[i].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+      writes[img_bindings[i]].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes[img_bindings[i]].dstSet = desc_set;
+      writes[img_bindings[i]].dstBinding = img_bindings[i];
+      writes[img_bindings[i]].descriptorCount = 1;
+      writes[img_bindings[i]].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      writes[img_bindings[i]].pImageInfo = &img_infos[i];
+    }
 
     std::array<VkDescriptorBufferInfo, 17> bis{};
     for (uint32_t i = 0; i < 17; ++i) {
@@ -1020,6 +1027,24 @@ struct VulkanRT {
       }
     }
     return rgb;
+  }
+
+  // Download and Y-flip to top-left origin (matches OptiX AVIF write path).
+  std::vector<float> download_rgb_flipped(const Image &img) {
+    std::vector<float> bottom_left = download_rgb(img);
+    const int w = static_cast<int>(img.width);
+    const int h = static_cast<int>(img.height);
+    std::vector<float> top_left(bottom_left.size());
+    for (int y = 0; y < h; ++y) {
+      for (int x = 0; x < w; ++x) {
+        const size_t dst = static_cast<size_t>(y) * w + x;
+        const size_t src = static_cast<size_t>(h - 1 - y) * w + x;
+        top_left[dst * 3 + 0] = bottom_left[src * 3 + 0];
+        top_left[dst * 3 + 1] = bottom_left[src * 3 + 1];
+        top_left[dst * 3 + 2] = bottom_left[src * 3 + 2];
+      }
+    }
+    return top_left;
   }
 
   void destroy() {
@@ -1201,7 +1226,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     throw std::runtime_error("Vulkan backend: scene has no materials");
   }
 
-  std::cout << "Backend: vulkan (Phase 2d: IAS instances + flame volume)\n";
+  std::cout << "Backend: vulkan (Phase 3: path tracer + OptiX denoise post)\n";
   VulkanRT ctx;
   ctx.init();
   ctx.create_pipeline();
@@ -1439,7 +1464,13 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
 
   Image accum = ctx.create_storage_image(static_cast<uint32_t>(config.width),
                                          static_cast<uint32_t>(config.height));
+  Image albedo_img = ctx.create_storage_image(static_cast<uint32_t>(config.width),
+                                              static_cast<uint32_t>(config.height));
+  Image normal_img = ctx.create_storage_image(static_cast<uint32_t>(config.width),
+                                              static_cast<uint32_t>(config.height));
   ctx.clear_image(accum);
+  ctx.clear_image(albedo_img);
+  ctx.clear_image(normal_img);
 
   Buffer params_buf = ctx.create_buffer(sizeof(VulkanLaunchParams),
                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -1473,7 +1504,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
       &params_buf,  &vertex_buf,   &index_buf,   &mat_buf,     &mat_id_buf,  &light_buf,
       &spot_buf,    &texcoord_buf, &normal_buf,  &tangent_buf, &env_pix_buf, &env_cdf_buf,
       &env_row_buf, &tex_desc_buf, &tex_pix_buf, &mesh_range_buf, &volume_buf};
-  ctx.update_descriptors(tlas, accum, ssbos);
+  ctx.update_descriptors(tlas, accum, albedo_img, normal_img, ssbos);
 
   const int spp = std::max(1, config.spp);
   const int spl = lp.samples_per_launch;
@@ -1493,15 +1524,29 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   const double sec = std::chrono::duration<double>(t1 - t0).count();
   std::cout << "Trace time: " << sec << " s (" << (spp / sec) << " spp/s)\n";
 
-  std::vector<float> rgb = ctx.download_rgb(accum);
+  // Top-left origin RGB (matches OptiX write path) for AVIF + denoise.
+  std::vector<float> rgb = ctx.download_rgb_flipped(accum);
+  if (config.denoise) {
+    try {
+      std::cout << "Denoising (OptiX Denoiser post-process on Vulkan buffers)...\n";
+      std::vector<float> albedo = ctx.download_rgb_flipped(albedo_img);
+      std::vector<float> normal = ctx.download_rgb_flipped(normal_img);
+      denoise_hdr_rgb(config.width, config.height, rgb.data(), albedo.data(), normal.data());
+    } catch (const std::exception &ex) {
+      std::cerr << "Vulkan denoise unavailable, writing noisy image: " << ex.what() << "\n";
+    }
+  }
   write_avif_hdr_pq(config.output_path, config.width, config.height, rgb.data(), 100.0f);
-  std::cout << "Wrote " << config.output_path << " (HDR AVIF PQ, vulkan path tracer)\n";
+  std::cout << "Wrote " << config.output_path << " (HDR AVIF PQ, vulkan path tracer"
+            << (config.denoise ? ", denoised" : "") << ")\n";
 
   ctx.destroy_as(tlas);
   for (auto &b : blases) {
     ctx.destroy_as(b);
   }
   ctx.destroy_image(accum);
+  ctx.destroy_image(albedo_img);
+  ctx.destroy_image(normal_img);
   auto destroy_all = [&](Buffer &b) { ctx.destroy_buffer(b); };
   destroy_all(params_buf);
   destroy_all(vertex_buf);
