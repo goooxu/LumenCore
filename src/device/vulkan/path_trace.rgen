@@ -101,10 +101,12 @@ void main() {
     uint seed = pcg_hash(uint(pixel.x) + uint(pixel.y) * 1973u +
                          uint(params.sample_index + s) * 9277u + 1u);
 
+    // Match OptiX raygen: launch (0,0) is bottom of the image plane (v=0 → -V);
+    // host download_rgb_flipped then maps buffer → top-left AVIF.
     float u = (float(pixel.x) + rnd(seed)) / float(size.x);
     float v = (float(pixel.y) + rnd(seed)) / float(size.y);
     float ndc_x = 2.0 * u - 1.0;
-    float ndc_y = 1.0 - 2.0 * v;
+    float ndc_y = 2.0 * v - 1.0;
 
     vec3 origin = params.camera.eye;
     vec3 direction =
