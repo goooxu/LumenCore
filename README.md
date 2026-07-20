@@ -64,7 +64,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history.
 
 #### Beer-Lambert
 
-水下岩石：吸收系数正常 vs 全零（水深颜色衰减）。
+厚玻璃板透射棋盘格：吸收系数开（偏青/去红）vs 全零（中性透射）。
 
 | ON | OFF |
 |----|-----|

@@ -142,20 +142,23 @@ def render_normal(mode: str, out: str, width: int, spp: int, denoise: bool) -> N
 
 
 def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None:
-    """Dark room + area light: NEE on vs off (shadow/variance).
+    """Dark room + small area light: NEE on vs off (shadow/variance).
 
-    OFF: emissive mesh only (BSDF must hit the light).
+    OFF: emissive mesh only (BSDF must hit the light) — noisy at low spp.
     ON: emissive mesh + QuadLight(use_mis=True) so the lamp is visible and NEE is unbiased.
+    Denoise is always off: the point of this pair is raw variance, not cleaned beauty.
     """
     on = mode == "on"
+    del denoise  # ignored — NEE compare must stay undenoised
     scene = lc.Scene()
-    white = scene.add_material(lc.Material(base_color=(0.73, 0.73, 0.73), roughness=0.85))
-    red = scene.add_material(lc.Material(base_color=(0.55, 0.08, 0.06), roughness=0.85))
-    green = scene.add_material(lc.Material(base_color=(0.10, 0.40, 0.12), roughness=0.85))
+    white = scene.add_material(lc.Material(base_color=(0.73, 0.73, 0.73), roughness=0.92))
+    red = scene.add_material(lc.Material(base_color=(0.55, 0.08, 0.06), roughness=0.92))
+    green = scene.add_material(lc.Material(base_color=(0.10, 0.40, 0.12), roughness=0.92))
     metal = scene.add_material(lc.Material(base_color=(0.92, 0.88, 0.80), metallic=1.0, roughness=0.08))
-    diffuse = scene.add_material(lc.Material(base_color=(0.55, 0.52, 0.48), roughness=0.7))
+    diffuse = scene.add_material(lc.Material(base_color=(0.55, 0.52, 0.48), roughness=0.85))
+    # Brighter emission so the small lamp still lights the room; small area → hard BSDF hit.
     light_mat = scene.add_material(
-        lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9, emission=(28.0, 26.0, 22.0))
+        lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9, emission=(90.0, 84.0, 72.0))
     )
 
     # Small dark box (unit-ish room)
@@ -165,12 +168,13 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
     scene.add_mesh(lc.make_quad((0, 0, 0), (0, 0, 1), (0, 1, 0), red))
     scene.add_mesh(lc.make_quad((1, 0, 0), (0, 0, 1), (0, 1, 0), green))
 
-    light_corner = (0.28, 0.97, 0.28)
-    light_u = (0.44, 0, 0)
-    light_v = (0, 0, 0.44)
+    # Small ceiling lamp (~0.2×0.2): BSDF rarely hits without NEE.
+    light_corner = (0.40, 0.97, 0.40)
+    light_u = (0.20, 0, 0)
+    light_v = (0, 0, 0.20)
     scene.add_mesh(lc.make_quad(light_corner, light_u, light_v, light_mat))
     if on:
-        scene.add_quad_light(light_corner, light_u, light_v, (28.0, 26.0, 22.0), use_mis=True)
+        scene.add_quad_light(light_corner, light_u, light_v, (90.0, 84.0, 72.0), use_mis=True)
 
     scene.add_mesh(lc.make_box((0.18, 0.0, 0.55), (0.42, 0.45, 0.82), diffuse))
     scene.add_mesh(lc.make_uv_sphere((0.68, 0.18, 0.38), 0.18, metal, 40, 20))
@@ -189,7 +193,7 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
         width=width,
         height=width,
         spp=spp,
-        denoise=denoise,
+        denoise=False,  # variance is the signal
         enable_nee=on,
         output_path=out,
     )
@@ -197,14 +201,15 @@ def render_nee(mode: str, out: str, width: int, spp: int, denoise: bool) -> None
 
 
 def render_denoiser(mode: str, out: str, width: int, spp: int, denoise: bool) -> None:
-    """Mid-shot studio props at low spp: denoise on vs off."""
+    """Bright mid-shot with high-frequency props at very low spp: denoise on vs off."""
     on = mode == "on"
-    # Force low spp so noise is visible; CLI --spp can raise it but default is low.
     scene = lc.Scene()
-    floor = scene.add_material(lc.Material(base_color=(0.34, 0.33, 0.32), roughness=0.9))
-    wall = scene.add_material(lc.Material(base_color=(0.50, 0.48, 0.46), roughness=0.92))
+    # Checkerboard floor (two materials) so noise / denoise read clearly at thumbnail size.
+    floor_a = scene.add_material(lc.Material(base_color=(0.62, 0.60, 0.56), roughness=0.88))
+    floor_b = scene.add_material(lc.Material(base_color=(0.28, 0.27, 0.26), roughness=0.9))
+    wall = scene.add_material(lc.Material(base_color=(0.72, 0.70, 0.66), roughness=0.92))
     metal = scene.add_material(
-        lc.Material(base_color=(0.88, 0.86, 0.82), metallic=1.0, roughness=0.18)
+        lc.Material(base_color=(0.92, 0.90, 0.86), metallic=1.0, roughness=0.22)
     )
     glass = scene.add_material(
         lc.Material(
@@ -215,17 +220,29 @@ def render_denoiser(mode: str, out: str, width: int, spp: int, denoise: bool) ->
             absorption=(0.08, 0.04, 0.02),
         )
     )
-    diffuse = scene.add_material(lc.Material(base_color=(0.55, 0.28, 0.18), roughness=0.75))
+    diffuse = scene.add_material(lc.Material(base_color=(0.72, 0.32, 0.18), roughness=0.7))
+    accent = scene.add_material(lc.Material(base_color=(0.18, 0.42, 0.78), roughness=0.55))
 
-    scene.add_mesh(lc.make_quad((-2, 0, -2), (4, 0, 0), (0, 0, 4), floor))
+    # Checker tiles
+    tile = 0.35
+    for ix in range(-3, 4):
+        for iz in range(-3, 4):
+            x0 = ix * tile
+            z0 = iz * tile
+            mat = floor_a if ((ix + iz) & 1) == 0 else floor_b
+            scene.add_mesh(lc.make_quad((x0, 0, z0), (tile, 0, 0), (0, 0, tile), mat))
     scene.add_mesh(lc.make_quad((-2, 0, -1.5), (4, 0, 0), (0, 2.8, 0), wall))
     scene.add_mesh(lc.make_uv_sphere((-0.35, 0.35, 0.1), 0.35, metal, 40, 20))
     scene.add_mesh(lc.make_uv_sphere((0.45, 0.28, 0.25), 0.28, glass, 40, 20))
     scene.add_mesh(lc.make_box((-0.15, 0.0, -0.55), (0.25, 0.5, -0.15), diffuse))
+    # Extra small boxes for high-frequency edges
+    scene.add_mesh(lc.make_box((0.55, 0.0, -0.35), (0.78, 0.22, -0.12), accent))
+    scene.add_mesh(lc.make_box((-0.75, 0.0, 0.35), (-0.52, 0.18, 0.58), accent))
 
-    scene.add_quad_light((-0.4, 2.5, -0.2), (0.8, 0, 0), (0, 0, 0.6), (8.0, 7.5, 7.0))
-    scene.background_top = (0.15, 0.16, 0.20)
-    scene.background_bottom = (0.05, 0.05, 0.06)
+    # Brighter key so midtones sit higher and grain survives PQ encode / README shrink.
+    scene.add_quad_light((-0.5, 2.5, -0.3), (1.0, 0, 0), (0, 0, 0.8), (22.0, 20.0, 18.0))
+    scene.background_top = (0.22, 0.24, 0.28)
+    scene.background_bottom = (0.08, 0.08, 0.09)
 
     camera = lc.Camera(
         eye=(1.6, 1.2, 2.4),
@@ -233,17 +250,16 @@ def render_denoiser(mode: str, out: str, width: int, spp: int, denoise: bool) ->
         fov_y_deg=36.0,
         aspect=1.0,
     )
+    # mode=on → denoise; mode=off → raw (ignore CLI --denoise for honest pairs).
+    del denoise
     cfg = lc.RenderConfig(
         width=width,
         height=width,
         spp=spp,
-        denoise=on and denoise,
+        denoise=on,
         enable_nee=True,
         output_path=out,
     )
-    # When mode=off, always disable denoise regardless of --denoise flag.
-    if not on:
-        cfg.denoise = False
     lc.Renderer().render(scene, camera, cfg)
 
 
@@ -302,46 +318,59 @@ def render_flame(mode: str, out: str, width: int, spp: int, denoise: bool) -> No
 
 
 def render_beer(mode: str, out: str, width: int, spp: int, denoise: bool) -> None:
-    """Top-down pool: Beer-Lambert absorption on vs zero (flat water plane)."""
+    """Look through a thick glass slab at a checkerboard: absorption on vs zero.
+
+    Uses a closed glass box (not an open water plane). Single-sided quads with
+    wrong winding invert front_facing and never set medium_sigma; a solid slab
+    has clear enter/exit and a long path so Beer-Lambert color is obvious.
+    """
     on = mode == "on"
+    del denoise  # always off for absorption color
     scene = lc.Scene()
-    seabed = scene.add_material(lc.Material(base_color=(0.16, 0.38, 0.36), roughness=0.92))
-    rock = scene.add_material(lc.Material(base_color=(0.58, 0.48, 0.40), roughness=0.75))
-    rock2 = scene.add_material(lc.Material(base_color=(0.38, 0.40, 0.36), roughness=0.85))
-    absorption = (0.95, 0.28, 0.10) if on else (0.0, 0.0, 0.0)
-    water = scene.add_material(
+    floor = scene.add_material(lc.Material(base_color=(0.55, 0.55, 0.55), roughness=0.95))
+    wall_a = scene.add_material(lc.Material(base_color=(0.95, 0.95, 0.92), roughness=0.9))
+    wall_b = scene.add_material(lc.Material(base_color=(0.15, 0.15, 0.16), roughness=0.9))
+    # Strong channel-selective absorption: ~0.55 m slab kills red → cyan/teal.
+    absorption = (4.5, 0.9, 0.25) if on else (0.0, 0.0, 0.0)
+    glass = scene.add_material(
         lc.Material(
-            base_color=(0.55, 0.82, 0.90),
+            base_color=(1.0, 1.0, 1.0),
             roughness=0.0,
             transmission=1.0,
-            ior=1.33,
+            ior=1.5,
             absorption=absorption,
         )
     )
 
-    # Deep seabed + rocks; flat water surface (no waves) so depth color is readable.
-    scene.add_mesh(lc.make_quad((-4, -2.5, -4), (8, 0, 0), (0, 0, 8), seabed))
-    scene.add_mesh(lc.make_uv_sphere((0.0, -1.2, 0.15), 0.55, rock, 40, 24))
-    scene.add_mesh(lc.make_uv_sphere((-0.7, -1.6, -0.35), 0.38, rock2, 28, 16))
-    scene.add_mesh(lc.make_uv_sphere((0.75, -1.75, 0.45), 0.32, rock, 24, 16))
-    scene.add_mesh(lc.make_quad((-2.5, 0.0, -2.5), (5.0, 0, 0), (0, 0, 5.0), water))
+    scene.add_mesh(lc.make_quad((-3, 0, -2), (6, 0, 0), (0, 0, 6), floor))
+    # High-contrast checkerboard behind the slab
+    tile = 0.28
+    for ix in range(-5, 6):
+        for iy in range(0, 8):
+            x0 = ix * tile
+            y0 = 0.05 + iy * tile
+            mat = wall_a if ((ix + iy) & 1) == 0 else wall_b
+            scene.add_mesh(lc.make_quad((x0, y0, -0.9), (tile, 0, 0), (0, tile, 0), mat))
 
-    scene.add_quad_light((-1.5, 4.0, -1.5), (3.0, 0, 0), (0, 0, 3.0), (20.0, 22.0, 24.0))
-    scene.background_top = (0.60, 0.72, 0.85)
-    scene.background_bottom = (0.30, 0.42, 0.52)
+    # Thick glass slab between camera and board (~0.55 m along Z).
+    scene.add_mesh(lc.make_box((-1.1, 0.15, 0.05), (1.1, 1.85, 0.60), glass))
+
+    scene.add_quad_light((-0.8, 2.6, 0.2), (1.6, 0, 0), (0, 0, 0.8), (30.0, 30.0, 30.0))
+    scene.background_top = (0.45, 0.50, 0.58)
+    scene.background_bottom = (0.20, 0.22, 0.25)
 
     camera = lc.Camera(
-        eye=(0.2, 2.4, 3.2),
-        lookat=(0.0, -1.0, 0.0),
+        eye=(0.0, 1.0, 2.8),
+        lookat=(0.0, 0.95, -0.5),
         up=(0.0, 1.0, 0.0),
-        fov_y_deg=42.0,
+        fov_y_deg=32.0,
         aspect=1.0,
     )
     cfg = lc.RenderConfig(
         width=width,
         height=width,
         spp=spp,
-        denoise=False,  # keep depth color; denoiser softens absorption contrast
+        denoise=False,
         enable_nee=True,
         output_path=out,
     )
@@ -359,9 +388,9 @@ RENDERERS = {
 
 def default_spp(feature: str) -> int:
     if feature == "denoiser":
-        return 24
+        return 10
     if feature == "nee":
-        return 128
+        return 48
     return 192
 
 

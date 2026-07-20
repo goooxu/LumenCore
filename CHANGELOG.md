@@ -9,6 +9,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Fixed
 
+- **Gallery feature compares** (NEE / Denoiser / Beer-Lambert) were hard to tell ON from OFF:
+  - **NEE**: force denoise off, smaller ceiling lamp, lower spp (48) so OFF is visibly noisy
+  - **Denoiser**: lower spp (10), brighter scene + checker floor so grain vs clean reads at thumbnail size
+  - **Beer-Lambert**: open water plane used `make_quad` with geometric normal −Y, so `front_facing` never entered the medium and absorption did nothing; compare is now a thick closed glass slab over a checkerboard
 - **Emissive paths**: terminate after adding emission; denoiser albedo guide uses `base+clamp(emission)` so lights are not wiped (beauty estimator unchanged)
 - Visible lamp panels use non-zero `base_color` (reflectance) separate from `emission`
 - Gallery NEE compare framing keeps the ceiling lamp fully in view
@@ -16,6 +20,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - **GGX VNDF**: Heitz 2018 visible-normal sampling + matching solid-angle PDF; exact Smith G1
 - **Virtual lights**: quad/spot NEE weight is 1 by default; HDRI MIS unchanged
 - **Self-intersection**: geometric-normal `offset_ray_origin` for continuation and shadow rays
+
+### Changed
+
+- `scripts/render_gallery.sh`: per-feature `NEE_SPP` / `DENOISER_SPP`; NEE and Beer compares pass `--denoise 0`
 
 ## [0.16.0] - 2026-07-18
 

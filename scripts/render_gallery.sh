@@ -29,7 +29,8 @@ else
 fi
 SHOWCASE_SPP="${SHOWCASE_SPP:-192}"
 COMPARE_SPP="${COMPARE_SPP:-192}"
-DENOISER_SPP="${DENOISER_SPP:-24}"
+NEE_SPP="${NEE_SPP:-48}"
+DENOISER_SPP="${DENOISER_SPP:-10}"
 COMPARE_WIDTH="${COMPARE_WIDTH:-1024}"
 
 HOST_OUT="${NRTX_OUT_DIR:-/tmp/LumenCore-out}"
@@ -81,11 +82,20 @@ FEATURES=(normal nee denoiser flame beer)
 for feat in "${FEATURES[@]}"; do
   for mode in on off; do
     spp="${COMPARE_SPP}"
+    denoise=1
     if [[ "${feat}" == "denoiser" ]]; then
       spp="${DENOISER_SPP}"
+      denoise=1
+    elif [[ "${feat}" == "nee" ]]; then
+      # Low spp + no denoise: variance is the NEE signal.
+      spp="${NEE_SPP}"
+      denoise=0
+    elif [[ "${feat}" == "beer" ]]; then
+      # Absorption color must not be softened by the denoiser.
+      denoise=0
     fi
     g=$(next_gpu)
-    JOBS+=("${g}|${feat}_${mode}|python3 /work/python/scenes/gallery_compare.py --feature ${feat} --mode ${mode} --out /results/gallery/compare/${feat}_${mode}.avif --width ${COMPARE_WIDTH} --spp ${spp} --denoise 1")
+    JOBS+=("${g}|${feat}_${mode}|python3 /work/python/scenes/gallery_compare.py --feature ${feat} --mode ${mode} --out /results/gallery/compare/${feat}_${mode}.avif --width ${COMPARE_WIDTH} --spp ${spp} --denoise ${denoise}")
   done
 done
 
