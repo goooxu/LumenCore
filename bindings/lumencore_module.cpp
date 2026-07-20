@@ -141,7 +141,8 @@ PYBIND11_MODULE(lumencore, m) {
   py::class_<RenderConfig>(m, "RenderConfig")
       .def(py::init<>())
       .def(py::init([](int width, int height, int spp, int samples_per_launch, int max_depth,
-                       bool denoise, bool enable_nee, const std::string &output_path) {
+                       bool denoise, bool enable_nee, const std::string &output_path,
+                       const std::string &backend) {
              RenderConfig c;
              c.width = width;
              c.height = height;
@@ -151,11 +152,13 @@ PYBIND11_MODULE(lumencore, m) {
              c.denoise = denoise;
              c.enable_nee = enable_nee;
              c.output_path = output_path;
+             c.backend = backend;
              return c;
            }),
            py::arg("width") = 1024, py::arg("height") = 1024, py::arg("spp") = 256,
            py::arg("samples_per_launch") = 1, py::arg("max_depth") = 16, py::arg("denoise") = true,
-           py::arg("enable_nee") = true, py::arg("output_path") = "out.avif")
+           py::arg("enable_nee") = true, py::arg("output_path") = "out.avif",
+           py::arg("backend") = "optix")
       .def_readwrite("width", &RenderConfig::width)
       .def_readwrite("height", &RenderConfig::height)
       .def_readwrite("spp", &RenderConfig::spp)
@@ -163,7 +166,11 @@ PYBIND11_MODULE(lumencore, m) {
       .def_readwrite("max_depth", &RenderConfig::max_depth)
       .def_readwrite("denoise", &RenderConfig::denoise)
       .def_readwrite("enable_nee", &RenderConfig::enable_nee)
+      .def_readwrite("backend", &RenderConfig::backend)
       .def_readwrite("output_path", &RenderConfig::output_path);
+
+  m.def("vulkan_backend_available", &vulkan_backend_available,
+        "True if this build was configured with LUMENCORE_ENABLE_VULKAN");
 
   py::class_<Mesh>(m, "Mesh").def(py::init<>());
 

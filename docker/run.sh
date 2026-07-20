@@ -35,14 +35,18 @@ fi
 
 # CUDA image + Python headers + libavif (HDR AVIF I/O) + git (FetchContent).
 # Bump tag when apt package set changes (forces rebuild of the helper image).
-BUILD_IMAGE_TAG="lumencore-build:cuda13-avif-v2"
+# vk2: libEGL/X11 (NVIDIA Vulkan ICD needs them) + glslang-tools (SPIR-V for RT shaders).
+BUILD_IMAGE_TAG="lumencore-build:cuda13-avif-vk2"
 if [[ "${IMAGE}" == "nvidia/cuda:13.0.1-devel-ubuntu24.04" ]]; then
   if ! docker image inspect "${BUILD_IMAGE_TAG}" >/dev/null 2>&1; then
-    echo "Building ${BUILD_IMAGE_TAG} (python3-dev + libavif + git + curl) ..."
+    echo "Building ${BUILD_IMAGE_TAG} (python3-dev + libavif + git + curl + vulkan + egl + glslang) ..."
     docker run --name lumencore-pysetup "${IMAGE}" bash -lc \
       "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
         python3 python3-dev git pkg-config curl ca-certificates \
-        libavif-dev libaom-dev libavif-bin"
+        libavif-dev libaom-dev libavif-bin \
+        libvulkan-dev vulkan-tools glslang-tools \
+        libegl1 libgl1 libglvnd0 libglx0 libgles2 \
+        libx11-6 libxext6"
     docker commit lumencore-pysetup "${BUILD_IMAGE_TAG}"
     docker rm lumencore-pysetup
   fi
@@ -129,7 +133,29 @@ if [[ -d /tmp/packman-cache/chk/PhysXGpu ]] && [[ -r /tmp/packman-cache/chk/Phys
 fi
 mkdir -p "${BUILD_DIR}/packman-cache"
 
+# NVIDIA Vulkan ICD stack for Phase 1 RT:
+# - libGLX_nvidia (ICD) dlopens libEGL.so.1 → needs libegl1 in the image
+# - Host ICD JSON + glvnd EGL vendor JSON + /usr/share/nvidia profiles
+# - /dev/dri for render nodes (optional but helps discrete GPU selection)
+# Prefer NV discrete GPU in-app; do NOT force VK_ICD_FILENAMES alone (breaks if incomplete).
+VULKAN_MOUNT_ARGS=()
+if [[ -f /etc/vulkan/icd.d/nvidia_icd.json ]]; then
+  VULKAN_MOUNT_ARGS+=(-v /etc/vulkan/icd.d/nvidia_icd.json:/etc/vulkan/icd.d/nvidia_icd.json:ro)
+fi
+if [[ -d /usr/share/glvnd/egl_vendor.d ]]; then
+  VULKAN_MOUNT_ARGS+=(-v /usr/share/glvnd/egl_vendor.d:/usr/share/glvnd/egl_vendor.d:ro)
+fi
+DRI_ARGS=()
+if [[ -d /dev/dri ]]; then
+  DRI_ARGS+=(--device /dev/dri)
+  # Host "video" group owns card nodes; map it when present.
+  if getent group video >/dev/null 2>&1; then
+    DRI_ARGS+=(--group-add video)
+  fi
+fi
+
 docker run --rm "${GPU_ARGS[@]}" \
+  "${DRI_ARGS[@]}" \
   -u "$(id -u):$(id -g)" \
   -v "${ROOT}:/work:ro" \
   -v "${BUILD_DIR}:/out" \
@@ -140,13 +166,17 @@ docker run --rm "${GPU_ARGS[@]}" \
   "${OPTIX_MOUNT_ARGS[@]}" \
   "${PHYSX_MOUNT_ARGS[@]}" \
   "${PACKMAN_MOUNT_ARGS[@]}" \
+  "${VULKAN_MOUNT_ARGS[@]}" \
   -w /out \
   -e PATH=/cmake/bin:/usr/local/cuda/bin:/usr/bin:/bin \
   -e LD_LIBRARY_PATH="${LD_EXTRA}" \
   -e NRTX_PTX=/out/shaders.optixir \
+  -e NRTX_VK_SPV_DIR=/out \
   -e LUMENCORE_ROOT=/work \
   -e PYTHONPATH=/out/python \
   -e HOME=/tmp \
   -e PM_PACKAGES_ROOT=/out/packman-cache \
+  -e NVIDIA_DRIVER_CAPABILITIES="${NVIDIA_DRIVER_CAPABILITIES:-compute,utility,graphics}" \
+  -e NVIDIA_VISIBLE_DEVICES="${NVIDIA_VISIBLE_DEVICES:-all}" \
   "${IMAGE}" \
   bash -lc "${CONTAINER_LD_PRELOAD_CMD}${CMD}"

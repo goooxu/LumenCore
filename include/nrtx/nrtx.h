@@ -136,6 +136,8 @@ struct RenderConfig {
   int max_depth = 16;
   bool denoise = true;
   bool enable_nee = true;
+  /** Render backend: "optix" (default full path tracer) or "vulkan" (Phase 1 RT path tracer). */
+  std::string backend = "optix";
   std::string output_path = "out.avif";
 };
 
@@ -150,9 +152,12 @@ public:
   void render(const Scene &scene, const Camera &camera, const RenderConfig &config);
 
 private:
-  struct Impl;
+  struct Impl; // OptiX path tracer (lazy-created when backend=optix)
   std::unique_ptr<Impl> impl_;
 };
+
+/** True if this build linked Vulkan (LUMENCORE_ENABLE_VULKAN). */
+bool vulkan_backend_available();
 
 Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int material_id);
 Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id);

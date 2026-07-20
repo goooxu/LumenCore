@@ -1,0 +1,225 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "common.glsl"
+
+layout(binding = 0, set = 0) uniform accelerationStructureEXT topLevelAS;
+layout(binding = 1, set = 0, rgba32f) uniform image2D accumImage;
+
+layout(binding = 2, set = 0, scalar) readonly buffer ParamsBuf {
+  LaunchParams params;
+};
+
+layout(binding = 3, set = 0, scalar) readonly buffer Vertices {
+  vec3 vertices[];
+};
+
+layout(binding = 4, set = 0, scalar) readonly buffer Indices {
+  uvec3 indices[];
+};
+
+layout(binding = 5, set = 0, scalar) readonly buffer Materials {
+  MaterialGPU materials[];
+};
+
+layout(binding = 6, set = 0, scalar) readonly buffer MaterialIds {
+  int material_ids[];
+};
+
+layout(binding = 7, set = 0, scalar) readonly buffer Lights {
+  QuadLight lights[];
+};
+
+layout(location = 0) rayPayloadEXT HitPayload payload;
+layout(location = 1) rayPayloadEXT ShadowPayload shadow_payload;
+
+vec3 sample_background(vec3 dir) {
+  float t = 0.5 * (normalize(dir).y + 1.0);
+  return mix(params.background_bottom, params.background_top, t);
+}
+
+// Shadow ray: returns 1 if light is visible.
+float visibility(vec3 origin, vec3 dir, float tmax) {
+  shadow_payload.visible = 0u;
+  uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT |
+               gl_RayFlagsOpaqueEXT;
+  traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 1 /*miss index*/, origin, TMIN, dir, tmax, 1);
+  return float(shadow_payload.visible);
+}
+
+// Sample a quad light; returns Le contribution weight (not including BRDF).
+vec3 sample_quad_light(int li, vec3 p, vec3 n, inout uint seed, out vec3 wi, out float pdf,
+                       out float dist) {
+  QuadLight L = lights[li];
+  float r1 = rnd(seed);
+  float r2 = rnd(seed);
+  vec3 light_pos = L.corner + r1 * L.u + r2 * L.v;
+  vec3 to_light = light_pos - p;
+  dist = length(to_light);
+  wi = to_light / max(dist, 1e-8);
+  vec3 ln = normalize(cross(L.u, L.v));
+  float cos_l = abs(dot(ln, -wi));
+  float cos_p = max(dot(n, wi), 0.0);
+  float area = (L.inv_area > 0.0) ? (1.0 / L.inv_area) : 0.0;
+  pdf = (area > 0.0 && cos_l > 0.0) ? (dist * dist) / (area * cos_l) : 0.0;
+  if (pdf <= 0.0 || cos_p <= 0.0) {
+    return vec3(0.0);
+  }
+  float vis = visibility(offset_ray_origin(p, n), wi, dist - 2.0 * TMIN);
+  return L.emission * cos_p * vis / pdf;
+}
+
+void main() {
+  const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+  const ivec2 size = ivec2(gl_LaunchSizeEXT.xy);
+  if (pixel.x >= params.width || pixel.y >= params.height) {
+    return;
+  }
+
+  vec3 accum = vec3(0.0);
+
+  for (int s = 0; s < params.samples_per_launch; ++s) {
+    uint seed = pcg_hash(uint(pixel.x) + uint(pixel.y) * 1973u +
+                         uint(params.sample_index + s) * 9277u + 1u);
+
+    // Jittered pixel in NDC
+    float u = (float(pixel.x) + rnd(seed)) / float(size.x);
+    float v = (float(pixel.y) + rnd(seed)) / float(size.y);
+    // Image plane: y flips so v=0 is bottom if we want top-left origin like OptiX.
+    // Match OptiX host: pixel (0,0) top-left → v from top.
+    float ndc_x = 2.0 * u - 1.0;
+    float ndc_y = 1.0 - 2.0 * v;
+
+    vec3 origin = params.camera.eye;
+    vec3 direction = normalize(ndc_x * params.camera.U + ndc_y * params.camera.V + params.camera.W);
+
+    vec3 throughput = vec3(1.0);
+    vec3 radiance = vec3(0.0);
+
+    for (int depth = 0; depth < params.max_depth; ++depth) {
+      payload.hit = 0;
+      payload.seed = seed;
+      payload.radiance = vec3(0.0);
+
+      traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0 /*miss*/, origin, TMIN,
+                  direction, TMAX, 0);
+
+      seed = payload.seed;
+
+      if (payload.hit == 0) {
+        // Miss: environment / background
+        radiance += throughput * payload.radiance;
+        break;
+      }
+
+      // Emissive surface (direct hit)
+      radiance += throughput * payload.emission;
+
+      vec3 n = payload.hit_normal;
+      vec3 p = payload.hit_pos;
+      vec3 wo = -direction; // toward camera / previous
+      if (dot(n, wo) < 0.0) {
+        n = -n; // two-sided shading for Phase 1
+      }
+
+      // Next-event estimation (quad lights) for opaque diffuse/metal only
+      bool is_glass = payload.transmission > 0.5;
+      if (params.enable_nee != 0 && params.light_count > 0 && !is_glass) {
+        int li = int(rnd(seed) * float(params.light_count));
+        li = min(li, params.light_count - 1);
+        vec3 wi_l;
+        float pdf_l;
+        float dist_l;
+        vec3 Le_w = sample_quad_light(li, p, n, seed, wi_l, pdf_l, dist_l);
+        if (pdf_l > 0.0 && luminance(Le_w) > 0.0) {
+          // Lambert BRDF * light (metal uses same for Phase 1 NEE simplicity)
+          float cos_i = max(dot(n, wi_l), 0.0);
+          vec3 brdf = payload.base_color * INV_PI * (1.0 - payload.metallic);
+          // scale by light selection pdf
+          radiance += throughput * brdf * Le_w * float(params.light_count);
+        }
+      }
+
+      // BSDF sample continuation
+      vec3 wi;
+      vec3 bsdf_weight; // f * cos / pdf
+
+      if (is_glass) {
+        // Perfect dielectric refraction / reflection
+        float eta_i = 1.0;
+        float eta_t = max(payload.ior, 1.01);
+        vec3 ng = payload.hit_normal;
+        bool entering = dot(direction, ng) < 0.0;
+        vec3 nl = entering ? ng : -ng;
+        float eta = entering ? (eta_i / eta_t) : (eta_t / eta_i);
+        float cos_i = -dot(nl, direction);
+        float F = fresnel_schlick(cos_i, eta);
+        if (rnd(seed) < F) {
+          wi = reflect(direction, nl);
+          bsdf_weight = vec3(1.0);
+          p = offset_ray_origin(p, nl);
+        } else {
+          vec3 refr = refract(direction, nl, eta);
+          if (dot(refr, refr) < 1e-8) {
+            wi = reflect(direction, nl);
+            bsdf_weight = vec3(1.0);
+            p = offset_ray_origin(p, nl);
+          } else {
+            wi = normalize(refr);
+            bsdf_weight = payload.base_color;
+            p = offset_ray_origin(p, -nl);
+          }
+        }
+      } else if (payload.metallic > 0.5) {
+        // Smooth metal reflection (Phase 1: ignore roughness for specular lobe)
+        wi = reflect(direction, n);
+        float cos_i = max(dot(n, wi), 0.0);
+        bsdf_weight = payload.base_color; // delta reflection weight
+        p = offset_ray_origin(p, n);
+        if (cos_i <= 0.0) {
+          break;
+        }
+      } else {
+        // Lambert cosine hemisphere
+        float r1 = rnd(seed);
+        float r2 = rnd(seed);
+        vec3 local = cosine_sample_hemisphere(r1, r2);
+        wi = to_world(local, n);
+        // f = albedo/pi, pdf = cos/pi → weight = albedo
+        bsdf_weight = payload.base_color;
+        p = offset_ray_origin(p, n);
+      }
+
+      throughput *= bsdf_weight;
+
+      // Russian roulette
+      if (depth >= 3) {
+        float q = clamp(luminance(throughput), 0.05, 0.95);
+        if (rnd(seed) > q) {
+          break;
+        }
+        throughput /= q;
+      }
+
+      if (luminance(throughput) < 1e-4) {
+        break;
+      }
+
+      origin = p;
+      direction = wi;
+    }
+
+    accum += radiance;
+  }
+
+  // Accumulate into storage image (RGBA32F). sample_index is absolute spp base.
+  vec4 prev = imageLoad(accumImage, pixel);
+  float n_old = float(params.sample_index);
+  float n_new = n_old + float(params.samples_per_launch);
+  vec3 sum = prev.rgb * n_old + accum;
+  vec3 mean = sum / max(n_new, 1.0);
+  imageStore(accumImage, pixel, vec4(mean, 1.0));
+}

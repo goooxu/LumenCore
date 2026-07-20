@@ -7,6 +7,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- **Dual render backend (Phase 0→1)**: `RenderConfig.backend` = `"optix"` (default) or `"vulkan"`
+  - OptiX path unchanged (lazy context init)
+  - **Phase 1 Vulkan RT path tracer**: BLAS/TLAS, GLSL rgen/rmiss/rchit (+ shadow miss), Lambert/metal/glass + area-light NEE, HDR AVIF out
+  - CMake compiles `src/device/vulkan/*` → SPIR-V via `glslangValidator`; runtime loads via `NRTX_VK_SPV_DIR`
+  - CMake `LUMENCORE_ENABLE_VULKAN` (default ON when Vulkan is found); `lumencore.vulkan_backend_available()`
+  - Docker image `lumencore-build:cuda13-avif-vk2`: Vulkan + libEGL/X11 (NVIDIA ICD) + glslang-tools; mounts ICD/EGL vendor JSON and `/dev/dri`
+
 ### Changed
 
 - **Build fetches third-party deps at configure time** (`LUMENCORE_FETCH_DEPS=ON` by default):
