@@ -86,7 +86,8 @@ ensure_physx_gpu() {
       # Bootstrap packman python / fetch dependency packages for linux.
       if [[ -x ./buildtools/packman/packman ]]; then
         # pull all packages listed for this platform
-        ./buildtools/packman/packman pull dependencies.xml +platform-linux \
+        # packman wants --platform (not +platform-linux).
+        ./buildtools/packman/packman pull dependencies.xml --platform linux \
           || ./buildtools/packman/packman pull dependencies.xml \
           || true
       fi
