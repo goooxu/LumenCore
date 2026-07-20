@@ -28,7 +28,7 @@ struct CameraGPU {
   float pad5;
 };
 
-// Scalar layout; matches host MaterialGPUHost (64 bytes).
+// Scalar layout; matches host MaterialGPUHost (80 bytes).
 struct MaterialGPU {
   vec3 base_color;
   float metallic;
@@ -40,6 +40,10 @@ struct MaterialGPU {
   int albedo_tex; // -1 = none
   vec3 absorption;
   int normal_tex; // -1 = none
+  int volume_index;
+  int pad_m0;
+  int pad_m1;
+  int pad_m2;
 };
 
 struct QuadLight {
@@ -74,6 +78,30 @@ struct TextureDesc {
   int pad;
 };
 
+// Per-prototype mesh offsets into packed vertex/index SSBOs.
+struct MeshRange {
+  int vertex_base;
+  int prim_base;
+  int pad0;
+  int pad1;
+};
+
+// Flame volume params (matches host FlameVolumeHost, 64 bytes).
+struct FlameVolume {
+  vec3 center;
+  float density_scale;
+  vec3 half_extents;
+  float absorption;
+  vec3 emission_scale;
+  float noise_scale;
+  float time;
+  float pad0;
+  float pad1;
+  float pad2;
+};
+
+const int MATERIAL_FLAG_VOLUME_FLAME = 1;
+
 // std430-friendly scene params (matches host VulkanLaunchParams).
 struct LaunchParams {
   uint64_t tlas;
@@ -92,7 +120,7 @@ struct LaunchParams {
   float env_total_lum;
   float pad_env;
   int texture_count;
-  int pad_tex;
+  int volume_count;
   vec3 background_top;
   float pad0;
   vec3 background_bottom;
@@ -114,6 +142,8 @@ struct HitPayload {
   float ior;
   float t_hit;
   int hit;
+  int flags;
+  int volume_index;
   uint seed;
 };
 

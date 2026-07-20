@@ -10,11 +10,18 @@ layout(location = 0) rayPayloadInEXT HitPayload payload;
 hitAttributeEXT vec2 baryCoord;
 
 void main() {
-  const int prim = gl_PrimitiveID;
-  uvec3 idx = indices[prim];
-  vec3 v0 = vertices[idx.x];
-  vec3 v1 = vertices[idx.y];
-  vec3 v2 = vertices[idx.z];
+  int mesh_id = int(gl_InstanceCustomIndexEXT);
+  MeshRange range = mesh_ranges[mesh_id];
+
+  const int prim = range.prim_base + gl_PrimitiveID;
+  uvec3 li = indices[prim];
+  uint i0 = uint(range.vertex_base) + li.x;
+  uint i1 = uint(range.vertex_base) + li.y;
+  uint i2 = uint(range.vertex_base) + li.z;
+
+  vec3 v0 = vertices[i0];
+  vec3 v1 = vertices[i1];
+  vec3 v2 = vertices[i2];
 
   float b1 = baryCoord.x;
   float b2 = baryCoord.y;
@@ -23,16 +30,15 @@ void main() {
   vec3 obj_pos = b0 * v0 + b1 * v1 + b2 * v2;
   vec3 ng_obj = normalize(cross(v1 - v0, v2 - v0));
 
-  // Interpolated shading normal if present
   vec3 n_obj = ng_obj;
-  vec3 n0 = normals[idx.x];
-  vec3 n1 = normals[idx.y];
-  vec3 n2 = normals[idx.z];
+  vec3 n0 = normals[i0];
+  vec3 n1 = normals[i1];
+  vec3 n2 = normals[i2];
   if (dot(n0, n0) + dot(n1, n1) + dot(n2, n2) > 1e-8) {
     n_obj = normalize(b0 * n0 + b1 * n1 + b2 * n2);
   }
 
-  vec2 uv = b0 * texcoords[idx.x] + b1 * texcoords[idx.y] + b2 * texcoords[idx.z];
+  vec2 uv = b0 * texcoords[i0] + b1 * texcoords[i1] + b2 * texcoords[i2];
 
   int mid = material_ids[prim];
   if (mid < 0 || mid >= params.material_count) {
@@ -40,16 +46,15 @@ void main() {
   }
   MaterialGPU mat = materials[mid];
 
-  // Tangent-space normal map
   if (mat.normal_tex >= 0 && mat.normal_tex < params.texture_count) {
     vec3 encoded = sample_albedo_tex(mat.normal_tex, uv);
     vec3 n_ts = encoded * 2.0 - 1.0;
     float nts2 = dot(n_ts, n_ts);
     if (nts2 > 1e-8) {
       n_ts *= inversesqrt(nts2);
-      vec4 t0 = tangents[idx.x];
-      vec4 t1 = tangents[idx.y];
-      vec4 t2 = tangents[idx.z];
+      vec4 t0 = tangents[i0];
+      vec4 t1 = tangents[i1];
+      vec4 t2 = tangents[i2];
       vec3 T = b0 * t0.xyz + b1 * t1.xyz + b2 * t2.xyz;
       T = T - n_obj * dot(n_obj, T);
       float t2len = dot(T, T);
@@ -87,5 +92,7 @@ void main() {
   payload.transmission = mat.transmission;
   payload.ior = mat.ior;
   payload.t_hit = gl_HitTEXT;
+  payload.flags = mat.flags;
+  payload.volume_index = mat.volume_index;
   payload.radiance = vec3(0.0);
 }

@@ -68,6 +68,14 @@ layout(binding = 16, set = 0, scalar) readonly buffer TexPixels {
   uint tex_pixels[];
 };
 
+layout(binding = 17, set = 0, scalar) readonly buffer MeshRanges {
+  MeshRange mesh_ranges[];
+};
+
+layout(binding = 18, set = 0, scalar) readonly buffer Volumes {
+  FlameVolume volumes[];
+};
+
 // ---- Texture sampling ----
 vec3 unpack_rgba8(uint p) {
   return vec3(float(p & 255u), float((p >> 8) & 255u), float((p >> 16) & 255u)) * (1.0 / 255.0);

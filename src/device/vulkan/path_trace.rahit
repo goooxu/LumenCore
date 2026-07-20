@@ -7,11 +7,16 @@
 #include "bindings.glsl"
 
 void main() {
-  int mid = material_ids[gl_PrimitiveID];
+  int mesh_id = int(gl_InstanceCustomIndexEXT);
+  MeshRange range = mesh_ranges[mesh_id];
+  int prim = range.prim_base + gl_PrimitiveID;
+  int mid = material_ids[prim];
   if (mid < 0 || mid >= params.material_count) {
     mid = 0;
   }
-  if (materials[mid].transmission > 0.5) {
+  MaterialGPU mat = materials[mid];
+  // Glass and flame proxy boxes are transparent to shadow / NEE rays.
+  if (mat.transmission > 0.5 || (mat.flags & MATERIAL_FLAG_VOLUME_FLAME) != 0) {
     ignoreIntersectionEXT;
   }
   terminateRayEXT;

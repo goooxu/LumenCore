@@ -6,6 +6,7 @@
 
 #include "bindings.glsl"
 #include "bsdf.glsl"
+#include "flame.glsl"
 
 layout(location = 0) rayPayloadEXT HitPayload payload;
 layout(location = 1) rayPayloadEXT ShadowPayload shadow_payload;
@@ -141,6 +142,25 @@ void main() {
       float t_hit = max(payload.t_hit, 0.0);
       if (medium_active(medium_sigma) && t_hit > 0.0) {
         throughput *= beer_attenuate(medium_sigma, t_hit);
+      }
+
+      // Procedural flame volume proxy: march, add emission, continue past AABB
+      if ((payload.flags & MATERIAL_FLAG_VOLUME_FLAME) != 0 && payload.volume_index >= 0 &&
+          payload.volume_index < params.volume_count) {
+        FlameVolume vol = volumes[payload.volume_index];
+        vec3 Le_vol;
+        float Tr_vol;
+        vec3 new_origin;
+        integrate_flame_volume(vol, origin, direction, t_hit, seed, Le_vol, Tr_vol, new_origin);
+        radiance += throughput * Le_vol;
+        throughput *= Tr_vol;
+        origin = new_origin;
+        // direction unchanged
+        last_pdf = 0.0;
+        if (luminance(throughput) < 1e-4) {
+          break;
+        }
+        continue;
       }
 
       vec3 ng_geom = normalize(payload.hit_geom_normal);

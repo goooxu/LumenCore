@@ -67,6 +67,10 @@ struct MaterialGPUHost {
   int32_t albedo_tex;
   float absorption[3];
   int32_t normal_tex;
+  int32_t volume_index;
+  int32_t pad_m0;
+  int32_t pad_m1;
+  int32_t pad_m2;
 };
 
 struct QuadLightHost {
@@ -100,6 +104,26 @@ struct TextureDescHost {
   int32_t pad;
 };
 
+struct MeshRangeHost {
+  int32_t vertex_base;
+  int32_t prim_base;
+  int32_t pad0;
+  int32_t pad1;
+};
+
+struct FlameVolumeHost {
+  float center[3];
+  float density_scale;
+  float half_extents[3];
+  float absorption;
+  float emission_scale[3];
+  float noise_scale;
+  float time;
+  float pad0;
+  float pad1;
+  float pad2;
+};
+
 struct VulkanLaunchParams {
   uint64_t tlas;
   int32_t width;
@@ -117,7 +141,7 @@ struct VulkanLaunchParams {
   float env_total_lum;
   float pad_env;
   int32_t texture_count;
-  int32_t pad_tex;
+  int32_t volume_count;
   float background_top[3];
   float pad0;
   float background_bottom[3];
@@ -125,10 +149,12 @@ struct VulkanLaunchParams {
   CameraGPUHost camera;
 };
 
-static_assert(sizeof(MaterialGPUHost) == 64, "MaterialGPUHost layout");
+static_assert(sizeof(MaterialGPUHost) == 80, "MaterialGPUHost layout");
 static_assert(sizeof(QuadLightHost) == 80, "QuadLightHost layout");
 static_assert(sizeof(SpotLightHost) == 48, "SpotLightHost layout");
 static_assert(sizeof(TextureDescHost) == 16, "TextureDescHost layout");
+static_assert(sizeof(MeshRangeHost) == 16, "MeshRangeHost layout");
+static_assert(sizeof(FlameVolumeHost) == 64, "FlameVolumeHost layout");
 
 void set3(float *d, const float3 &v) {
   d[0] = v.x;
@@ -583,18 +609,21 @@ struct VulkanRT {
     as.address = 0;
   }
 
-  AccelerationStructure build_blas(const Buffer &vertex_buf, uint32_t vertex_count,
-                                   const Buffer &index_buf, uint32_t index_count) {
+  AccelerationStructure build_blas(const Buffer &vertex_buf, uint32_t vertex_base,
+                                   uint32_t vertex_count, const Buffer &index_buf,
+                                   uint32_t index_uint_offset, uint32_t index_count) {
     const uint32_t prim_count = index_count / 3;
 
     VkAccelerationStructureGeometryTrianglesDataKHR tri{};
     tri.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
     tri.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-    tri.vertexData.deviceAddress = vertex_buf.address;
+    tri.vertexData.deviceAddress =
+        vertex_buf.address + static_cast<VkDeviceAddress>(vertex_base) * sizeof(float) * 3;
     tri.vertexStride = sizeof(float) * 3;
-    tri.maxVertex = vertex_count - 1;
+    tri.maxVertex = vertex_count > 0 ? vertex_count - 1 : 0;
     tri.indexType = VK_INDEX_TYPE_UINT32;
-    tri.indexData.deviceAddress = index_buf.address;
+    tri.indexData.deviceAddress =
+        index_buf.address + static_cast<VkDeviceAddress>(index_uint_offset) * sizeof(uint32_t);
 
     VkAccelerationStructureGeometryKHR geometry{};
     geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -653,27 +682,16 @@ struct VulkanRT {
     return blas;
   }
 
-  AccelerationStructure build_tlas(const AccelerationStructure &blas) {
-    VkTransformMatrixKHR transform{};
-    // Identity 3x4 row-major
-    transform.matrix[0][0] = 1.f;
-    transform.matrix[1][1] = 1.f;
-    transform.matrix[2][2] = 1.f;
-
-    VkAccelerationStructureInstanceKHR inst{};
-    inst.transform = transform;
-    inst.instanceCustomIndex = 0;
-    inst.mask = 0xFF;
-    inst.instanceShaderBindingTableRecordOffset = 0;
-    inst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-    inst.accelerationStructureReference = blas.address;
-
-    Buffer inst_buf = create_buffer(sizeof(inst),
-                                    VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
-                                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    upload(inst_buf, &inst, sizeof(inst));
+  AccelerationStructure build_tlas(const std::vector<VkAccelerationStructureInstanceKHR> &insts) {
+    if (insts.empty()) {
+      throw std::runtime_error("Vulkan: empty TLAS instance list");
+    }
+    Buffer inst_buf =
+        create_buffer(insts.size() * sizeof(VkAccelerationStructureInstanceKHR),
+                      VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    upload(inst_buf, insts.data(), insts.size() * sizeof(VkAccelerationStructureInstanceKHR));
 
     VkAccelerationStructureGeometryInstancesDataKHR instances{};
     instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
@@ -693,7 +711,7 @@ struct VulkanRT {
     build_info.geometryCount = 1;
     build_info.pGeometries = &geometry;
 
-    const uint32_t prim_count = 1;
+    const uint32_t prim_count = static_cast<uint32_t>(insts.size());
     VkAccelerationStructureBuildSizesInfoKHR sizes{
         VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR};
     rt.vkGetAccelerationStructureBuildSizesKHR(device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
@@ -747,8 +765,8 @@ struct VulkanRT {
   }
 
   void create_pipeline() {
-    // 0 AS, 1 image, 2 params, 3-8 geom/lights, 9-11 attrs, 12-14 env, 15-16 textures
-    constexpr uint32_t kBindings = 17;
+    // 0 AS, 1 image, 2 params, 3-16 geom/env/tex, 17 mesh ranges, 18 volumes
+    constexpr uint32_t kBindings = 19;
     const VkShaderStageFlags rt_stages =
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
@@ -897,7 +915,7 @@ struct VulkanRT {
     std::array<VkDescriptorPoolSize, 3> pool_sizes{};
     pool_sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
     pool_sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1};
-    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 15};
+    pool_sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 17};
     VkDescriptorPoolCreateInfo dpci{};
     dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     dpci.maxSets = 1;
@@ -914,13 +932,13 @@ struct VulkanRT {
   }
 
   void update_descriptors(const AccelerationStructure &tlas, const Image &accum,
-                          const std::array<const Buffer *, 15> &ssbos) {
+                          const std::array<const Buffer *, 17> &ssbos) {
     VkWriteDescriptorSetAccelerationStructureKHR as_info{};
     as_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
     as_info.accelerationStructureCount = 1;
     as_info.pAccelerationStructures = &tlas.handle;
 
-    std::array<VkWriteDescriptorSet, 17> writes{};
+    std::array<VkWriteDescriptorSet, 19> writes{};
     writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext = &as_info;
     writes[0].dstSet = desc_set;
@@ -938,8 +956,8 @@ struct VulkanRT {
     writes[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     writes[1].pImageInfo = &img_info;
 
-    std::array<VkDescriptorBufferInfo, 15> bis{};
-    for (uint32_t i = 0; i < 15; ++i) {
+    std::array<VkDescriptorBufferInfo, 17> bis{};
+    for (uint32_t i = 0; i < 17; ++i) {
       bis[i].buffer = ssbos[i]->buffer;
       bis[i].offset = 0;
       bis[i].range = VK_WHOLE_SIZE;
@@ -1060,25 +1078,54 @@ CameraGPUHost make_camera_gpu(const Camera &cam) {
   return g;
 }
 
-struct MergedGeometry {
-  std::vector<float> vertices;   // xyz tightly packed
-  std::vector<float> texcoords;  // uv
-  std::vector<float> normals;    // xyz
-  std::vector<float> tangents;   // xyzw
-  std::vector<uint32_t> indices;
+struct PackedGeometry {
+  std::vector<float> vertices;
+  std::vector<float> texcoords;
+  std::vector<float> normals;
+  std::vector<float> tangents;
+  std::vector<uint32_t> indices; // local 0-based within each mesh range
   std::vector<int32_t> mat_ids;
+  std::vector<MeshRangeHost> ranges; // one per prototype mesh
 };
 
-MergedGeometry merge_scene_geometry(const Scene &scene) {
-  MergedGeometry g;
+void pose_to_transform(const Pose &pose, float out[12]) {
+  const float3 t = pose.position;
+  const float4 q = pose.quat;
+  const float x = q.x, y = q.y, z = q.z, w = q.w;
+  const float xx = x * x, yy = y * y, zz = z * z;
+  const float xy = x * y, xz = x * z, yz = y * z;
+  const float wx = w * x, wy = w * y, wz = w * z;
+  out[0] = 1.0f - 2.0f * (yy + zz);
+  out[1] = 2.0f * (xy - wz);
+  out[2] = 2.0f * (xz + wy);
+  out[3] = t.x;
+  out[4] = 2.0f * (xy + wz);
+  out[5] = 1.0f - 2.0f * (xx + zz);
+  out[6] = 2.0f * (yz - wx);
+  out[7] = t.y;
+  out[8] = 2.0f * (xz - wy);
+  out[9] = 2.0f * (yz + wx);
+  out[10] = 1.0f - 2.0f * (xx + yy);
+  out[11] = t.z;
+}
 
-  auto append_mesh = [&](const Mesh &mesh_in, const Pose *pose) {
-    Mesh mesh = mesh_in;
-    if (pose) {
-      mesh = apply_pose_to_mesh(mesh, *pose);
-    }
+void identity_transform(float out[12]) {
+  std::memset(out, 0, 12 * sizeof(float));
+  out[0] = out[5] = out[10] = 1.f;
+}
+
+// Pack each Scene::meshes[i] as a prototype (object-space). Local indices.
+PackedGeometry pack_prototypes(const Scene &scene) {
+  PackedGeometry g;
+  g.ranges.resize(scene.meshes.size());
+  for (size_t mi = 0; mi < scene.meshes.size(); ++mi) {
+    Mesh mesh = scene.meshes[mi];
     ensure_mesh_tangents(mesh);
-    const uint32_t base = static_cast<uint32_t>(g.vertices.size() / 3);
+    MeshRangeHost range{};
+    range.vertex_base = static_cast<int32_t>(g.vertices.size() / 3);
+    range.prim_base = static_cast<int32_t>(g.indices.size() / 3);
+    g.ranges[mi] = range;
+
     const size_t nv = mesh.vertices.size();
     for (size_t i = 0; i < nv; ++i) {
       const float3 &p = mesh.vertices[i];
@@ -1113,27 +1160,14 @@ MergedGeometry merge_scene_geometry(const Scene &scene) {
     }
     for (size_t t = 0; t < mesh.indices.size(); ++t) {
       const int3 &tri = mesh.indices[t];
-      g.indices.push_back(base + static_cast<uint32_t>(tri.x));
-      g.indices.push_back(base + static_cast<uint32_t>(tri.y));
-      g.indices.push_back(base + static_cast<uint32_t>(tri.z));
+      g.indices.push_back(static_cast<uint32_t>(tri.x));
+      g.indices.push_back(static_cast<uint32_t>(tri.y));
+      g.indices.push_back(static_cast<uint32_t>(tri.z));
       int mid = 0;
       if (!mesh.material_ids.empty()) {
         mid = mesh.material_ids[std::min(t, mesh.material_ids.size() - 1)];
       }
       g.mat_ids.push_back(mid);
-    }
-  };
-
-  if (!scene.instances.empty()) {
-    for (const SceneInstance &inst : scene.instances) {
-      if (inst.mesh_index < 0 || inst.mesh_index >= static_cast<int>(scene.meshes.size())) {
-        continue;
-      }
-      append_mesh(scene.meshes[static_cast<size_t>(inst.mesh_index)], &inst.pose);
-    }
-  } else {
-    for (const Mesh &m : scene.meshes) {
-      append_mesh(m, nullptr);
     }
   }
   return g;
@@ -1167,34 +1201,39 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     throw std::runtime_error("Vulkan backend: scene has no materials");
   }
 
-  std::cout << "Backend: vulkan (Phase 2c: GGX + HDRI + textures + Beer medium)\n";
+  std::cout << "Backend: vulkan (Phase 2d: IAS instances + flame volume)\n";
   VulkanRT ctx;
   ctx.init();
   ctx.create_pipeline();
 
-  MergedGeometry geom = merge_scene_geometry(scene);
+  PackedGeometry geom = pack_prototypes(scene);
   if (geom.indices.empty()) {
-    throw std::runtime_error("Vulkan backend: no triangles after merge");
+    throw std::runtime_error("Vulkan backend: no triangles");
   }
 
   const uint32_t vertex_count = static_cast<uint32_t>(geom.vertices.size() / 3);
   const uint32_t index_count = static_cast<uint32_t>(geom.indices.size());
-  std::cout << "Geometry: " << vertex_count << " verts, " << (index_count / 3) << " tris, "
-            << scene.materials.size() << " materials, " << scene.lights.size() << " lights, "
-            << scene.textures.size() << " textures"
+  std::cout << "Geometry: " << scene.meshes.size() << " prototypes, " << vertex_count
+            << " verts, " << (index_count / 3) << " tris, " << scene.materials.size()
+            << " materials, " << scene.lights.size() << " lights, " << scene.textures.size()
+            << " textures, " << scene.volumes.size() << " volumes"
             << (scene.env_map.empty() ? "" : ", HDRI") << "\n";
 
   auto usage_as_input = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
-  Buffer vertex_buf = ctx.create_buffer(geom.vertices.size() * sizeof(float), usage_as_input,
-                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(vertex_buf, geom.vertices.data(), geom.vertices.size() * sizeof(float));
+  Buffer vertex_buf = ctx.create_buffer(std::max(geom.vertices.size(), size_t{1}) * sizeof(float),
+                                        usage_as_input, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  if (!geom.vertices.empty()) {
+    ctx.upload(vertex_buf, geom.vertices.data(), geom.vertices.size() * sizeof(float));
+  }
 
-  Buffer index_buf = ctx.create_buffer(geom.indices.size() * sizeof(uint32_t), usage_as_input,
-                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-  ctx.upload(index_buf, geom.indices.data(), geom.indices.size() * sizeof(uint32_t));
+  Buffer index_buf = ctx.create_buffer(std::max(geom.indices.size(), size_t{1}) * sizeof(uint32_t),
+                                       usage_as_input, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  if (!geom.indices.empty()) {
+    ctx.upload(index_buf, geom.indices.data(), geom.indices.size() * sizeof(uint32_t));
+  }
 
   Buffer mat_id_buf =
       upload_storage(ctx, geom.mat_ids.data(), geom.mat_ids.size() * sizeof(int32_t));
@@ -1203,6 +1242,8 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   Buffer normal_buf = upload_storage(ctx, geom.normals.data(), geom.normals.size() * sizeof(float));
   Buffer tangent_buf =
       upload_storage(ctx, geom.tangents.data(), geom.tangents.size() * sizeof(float));
+  Buffer mesh_range_buf =
+      upload_storage(ctx, geom.ranges.data(), geom.ranges.size() * sizeof(MeshRangeHost));
 
   std::vector<MaterialGPUHost> mats(scene.materials.size());
   for (size_t i = 0; i < scene.materials.size(); ++i) {
@@ -1217,6 +1258,7 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
     mats[i].albedo_tex = m.albedo_tex;
     set3(mats[i].absorption, m.absorption);
     mats[i].normal_tex = m.normal_tex;
+    mats[i].volume_index = m.volume_index;
   }
   Buffer mat_buf = upload_storage(ctx, mats.data(), mats.size() * sizeof(MaterialGPUHost));
 
@@ -1301,8 +1343,99 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
       upload_storage(ctx, tex_descs.data(), tex_descs.size() * sizeof(TextureDescHost));
   Buffer tex_pix_buf = upload_storage(ctx, tex_pixels.data(), tex_pixels.size() * sizeof(uint32_t));
 
-  AccelerationStructure blas = ctx.build_blas(vertex_buf, vertex_count, index_buf, index_count);
-  AccelerationStructure tlas = ctx.build_tlas(blas);
+  // Flame volumes
+  std::vector<FlameVolumeHost> vols(std::max<size_t>(scene.volumes.size(), 1));
+  if (scene.volumes.empty()) {
+    std::memset(vols.data(), 0, sizeof(FlameVolumeHost));
+  } else {
+    vols.resize(scene.volumes.size());
+    for (size_t i = 0; i < scene.volumes.size(); ++i) {
+      const FlameVolume &V = scene.volumes[i];
+      set3(vols[i].center, V.center);
+      set3(vols[i].half_extents, V.half_extents);
+      set3(vols[i].emission_scale, V.emission_scale);
+      vols[i].density_scale = V.density_scale;
+      vols[i].absorption = V.absorption;
+      vols[i].noise_scale = V.noise_scale;
+      vols[i].time = V.time;
+    }
+  }
+  Buffer volume_buf = upload_storage(ctx, vols.data(), vols.size() * sizeof(FlameVolumeHost));
+
+  // One BLAS per prototype mesh
+  std::vector<AccelerationStructure> blases(scene.meshes.size());
+  for (size_t mi = 0; mi < scene.meshes.size(); ++mi) {
+    const MeshRangeHost &r = geom.ranges[mi];
+    const uint32_t vbase = static_cast<uint32_t>(r.vertex_base);
+    const uint32_t pbase = static_cast<uint32_t>(r.prim_base);
+    uint32_t vcount = 0;
+    uint32_t pcount = 0;
+    if (mi + 1 < geom.ranges.size()) {
+      vcount = static_cast<uint32_t>(geom.ranges[mi + 1].vertex_base - r.vertex_base);
+      pcount = static_cast<uint32_t>(geom.ranges[mi + 1].prim_base - r.prim_base);
+    } else {
+      vcount = vertex_count - vbase;
+      pcount = (index_count / 3) - pbase;
+    }
+    if (pcount == 0 || vcount == 0) {
+      // Empty mesh: still need a placeholder — skip with tiny degenerate not allowed.
+      // Build a dummy from first triangle of mesh 0 if needed.
+      throw std::runtime_error("Vulkan: empty prototype mesh " + std::to_string(mi));
+    }
+    blases[mi] = ctx.build_blas(vertex_buf, vbase, vcount, index_buf, pbase * 3, pcount * 3);
+  }
+
+  // TLAS instances
+  std::vector<VkAccelerationStructureInstanceKHR> tlas_insts;
+  if (!scene.instances.empty()) {
+    std::vector<SceneInstance> instances = scene.instances;
+    std::vector<char> referenced(scene.meshes.size(), 0);
+    for (const SceneInstance &inst : instances) {
+      if (inst.mesh_index < 0 || inst.mesh_index >= static_cast<int>(scene.meshes.size())) {
+        throw std::runtime_error("SceneInstance.mesh_index out of range");
+      }
+      referenced[static_cast<size_t>(inst.mesh_index)] = 1;
+    }
+    for (size_t i = 0; i < scene.meshes.size(); ++i) {
+      if (!referenced[i]) {
+        SceneInstance orphan;
+        orphan.mesh_index = static_cast<int>(i);
+        orphan.pose = Pose{};
+        instances.push_back(orphan);
+      }
+    }
+    tlas_insts.resize(instances.size());
+    for (size_t i = 0; i < instances.size(); ++i) {
+      const SceneInstance &si = instances[i];
+      VkAccelerationStructureInstanceKHR &vi = tlas_insts[i];
+      std::memset(&vi, 0, sizeof(vi));
+      float xform[12];
+      pose_to_transform(si.pose, xform);
+      std::memcpy(vi.transform.matrix, xform, sizeof(xform));
+      vi.instanceCustomIndex = static_cast<uint32_t>(si.mesh_index);
+      vi.mask = 0xFF;
+      vi.instanceShaderBindingTableRecordOffset = 0;
+      vi.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+      vi.accelerationStructureReference = blases[static_cast<size_t>(si.mesh_index)].address;
+    }
+    std::cout << "IAS: " << scene.meshes.size() << " BLAS, " << tlas_insts.size() << " instances\n";
+  } else {
+    // Legacy: one identity instance per world-space mesh prototype
+    tlas_insts.resize(scene.meshes.size());
+    for (size_t mi = 0; mi < scene.meshes.size(); ++mi) {
+      VkAccelerationStructureInstanceKHR &vi = tlas_insts[mi];
+      std::memset(&vi, 0, sizeof(vi));
+      float xform[12];
+      identity_transform(xform);
+      std::memcpy(vi.transform.matrix, xform, sizeof(xform));
+      vi.instanceCustomIndex = static_cast<uint32_t>(mi);
+      vi.mask = 0xFF;
+      vi.instanceShaderBindingTableRecordOffset = 0;
+      vi.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+      vi.accelerationStructureReference = blases[mi].address;
+    }
+  }
+  AccelerationStructure tlas = ctx.build_tlas(tlas_insts);
 
   Image accum = ctx.create_storage_image(static_cast<uint32_t>(config.width),
                                          static_cast<uint32_t>(config.height));
@@ -1331,14 +1464,15 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   lp.env_height = scene.env_map.height;
   lp.env_total_lum = scene.env_map.total_luminance;
   lp.texture_count = static_cast<int32_t>(scene.textures.size());
+  lp.volume_count = static_cast<int32_t>(scene.volumes.size());
   set3(lp.background_top, scene.background_top);
   set3(lp.background_bottom, scene.background_bottom);
   lp.camera = make_camera_gpu(camera);
 
-  std::array<const Buffer *, 15> ssbos = {&params_buf,   &vertex_buf,  &index_buf,   &mat_buf,
-                                          &mat_id_buf,   &light_buf,   &spot_buf,    &texcoord_buf,
-                                          &normal_buf,   &tangent_buf, &env_pix_buf, &env_cdf_buf,
-                                          &env_row_buf,  &tex_desc_buf, &tex_pix_buf};
+  std::array<const Buffer *, 17> ssbos = {
+      &params_buf,  &vertex_buf,   &index_buf,   &mat_buf,     &mat_id_buf,  &light_buf,
+      &spot_buf,    &texcoord_buf, &normal_buf,  &tangent_buf, &env_pix_buf, &env_cdf_buf,
+      &env_row_buf, &tex_desc_buf, &tex_pix_buf, &mesh_range_buf, &volume_buf};
   ctx.update_descriptors(tlas, accum, ssbos);
 
   const int spp = std::max(1, config.spp);
@@ -1364,7 +1498,9 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   std::cout << "Wrote " << config.output_path << " (HDR AVIF PQ, vulkan path tracer)\n";
 
   ctx.destroy_as(tlas);
-  ctx.destroy_as(blas);
+  for (auto &b : blases) {
+    ctx.destroy_as(b);
+  }
   ctx.destroy_image(accum);
   auto destroy_all = [&](Buffer &b) { ctx.destroy_buffer(b); };
   destroy_all(params_buf);
@@ -1382,6 +1518,8 @@ void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig 
   destroy_all(env_row_buf);
   destroy_all(tex_desc_buf);
   destroy_all(tex_pix_buf);
+  destroy_all(mesh_range_buf);
+  destroy_all(volume_buf);
 }
 
 #else // !LUMENCORE_HAS_VULKAN
