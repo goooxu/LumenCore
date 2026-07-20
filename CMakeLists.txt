@@ -44,11 +44,15 @@ pkg_check_modules(AVIF REQUIRED IMPORTED_TARGET libavif)
 # Third-party: OptiX headers, PhysX, stb, pybind11 (fetched when LUMENCORE_FETCH_DEPS=ON).
 include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
 
+option(LUMENCORE_ENABLE_VULKAN "Build Vulkan render backend (Phase 0+ dual-backend)" ON)
+
 add_library(nrtx_host
   src/host/mesh.cpp
   src/host/obj_loader.cpp
   src/host/physx_world.cpp
   src/host/renderer.cpp
+  src/host/vulkan_renderer.cpp
+  src/host/optix_denoise.cpp
   src/host/env_map.cpp
   src/host/image_io.cpp
 )
@@ -68,6 +72,21 @@ target_link_libraries(nrtx_host PUBLIC
 )
 set_target_properties(nrtx_host PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(nrtx_host PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
+
+if(LUMENCORE_ENABLE_VULKAN)
+  find_package(Vulkan)
+  if(Vulkan_FOUND)
+    target_compile_definitions(nrtx_host PUBLIC LUMENCORE_HAS_VULKAN=1)
+    target_link_libraries(nrtx_host PUBLIC Vulkan::Vulkan)
+    message(STATUS "Vulkan backend: ENABLED (${Vulkan_LIBRARY})")
+  else()
+    message(WARNING
+      "LUMENCORE_ENABLE_VULKAN=ON but Vulkan was not found; "
+      "backend=\"vulkan\" will throw at runtime. Install libvulkan-dev / Vulkan SDK.")
+  endif()
+else()
+  message(STATUS "Vulkan backend: DISABLED")
+endif()
 
 # Compile device programs to OptiX-IR
 set(NRTX_SHADER_CU ${CMAKE_SOURCE_DIR}/src/device/shaders.cu)
@@ -97,9 +116,65 @@ add_custom_command(
 
 add_custom_target(nrtx_shaders ALL DEPENDS ${NRTX_SHADER_OPTIXIR})
 
+# ---------------------------------------------------------------------------
+# Vulkan RT shaders (GLSL → SPIR-V via glslangValidator)
+# ---------------------------------------------------------------------------
+set(NRTX_VK_SHADER_DIR ${CMAKE_SOURCE_DIR}/src/device/vulkan)
+set(NRTX_VK_SPV_DIR ${CMAKE_BINARY_DIR})
+set(NRTX_VK_COMMON_GLSL ${NRTX_VK_SHADER_DIR}/common.glsl)
+
+find_program(GLSLANG_VALIDATOR glslangValidator)
+if(NOT GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
+  message(WARNING
+    "glslangValidator not found; Vulkan RT SPIR-V will not be built. "
+    "Install glslang-tools (provides glslangValidator).")
+endif()
+
+set(NRTX_VK_SPV_OUTPUTS "")
+if(GLSLANG_VALIDATOR AND LUMENCORE_ENABLE_VULKAN AND Vulkan_FOUND)
+  # stage:source pairs
+  set(NRTX_VK_BSDF_GLSL ${NRTX_VK_SHADER_DIR}/bsdf.glsl)
+  set(NRTX_VK_BINDINGS_GLSL ${NRTX_VK_SHADER_DIR}/bindings.glsl)
+  set(NRTX_VK_FLAME_GLSL ${NRTX_VK_SHADER_DIR}/flame.glsl)
+  set(_NRTX_VK_SHADERS
+    "rgen:path_trace.rgen"
+    "rmiss:path_trace.rmiss"
+    "rmiss:path_trace_shadow.rmiss"
+    "rchit:path_trace.rchit"
+    "rahit:path_trace.rahit"
+  )
+  foreach(_entry ${_NRTX_VK_SHADERS})
+    string(REPLACE ":" ";" _pair "${_entry}")
+    list(GET _pair 0 _stage)
+    list(GET _pair 1 _src_name)
+    set(_src ${NRTX_VK_SHADER_DIR}/${_src_name})
+    set(_spv ${NRTX_VK_SPV_DIR}/${_src_name}.spv)
+    add_custom_command(
+      OUTPUT ${_spv}
+      COMMAND ${GLSLANG_VALIDATOR}
+        -V
+        -S ${_stage}
+        --target-env vulkan1.2
+        -I${NRTX_VK_SHADER_DIR}
+        ${_src}
+        -o ${_spv}
+      DEPENDS ${_src} ${NRTX_VK_COMMON_GLSL} ${NRTX_VK_BSDF_GLSL} ${NRTX_VK_BINDINGS_GLSL}
+              ${NRTX_VK_FLAME_GLSL}
+      COMMENT "Compiling Vulkan RT shader ${_src_name} → SPIR-V"
+      VERBATIM
+    )
+    list(APPEND NRTX_VK_SPV_OUTPUTS ${_spv})
+  endforeach()
+  add_custom_target(nrtx_vk_shaders ALL DEPENDS ${NRTX_VK_SPV_OUTPUTS})
+  message(STATUS "Vulkan RT shaders: glslangValidator=${GLSLANG_VALIDATOR}")
+endif()
+
 pybind11_add_module(lumencore bindings/lumencore_module.cpp)
 target_link_libraries(lumencore PRIVATE nrtx_host)
 add_dependencies(lumencore nrtx_shaders)
+if(TARGET nrtx_vk_shaders)
+  add_dependencies(lumencore nrtx_vk_shaders)
+endif()
 set_target_properties(lumencore PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/python
@@ -110,6 +185,7 @@ file(WRITE "${CMAKE_BINARY_DIR}/lumencore_env.sh"
 "export PHYSX_ROOT=\"${PHYSX_ROOT}\"
 export LD_LIBRARY_PATH=\"${PHYSX_BIN_DIR}\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\"
 export NRTX_PTX=\"${NRTX_SHADER_OPTIXIR}\"
+export NRTX_VK_SPV_DIR=\"${NRTX_VK_SPV_DIR}\"
 export PYTHONPATH=\"${CMAKE_BINARY_DIR}/python\${PYTHONPATH:+:\$PYTHONPATH}\"
 export LUMENCORE_ROOT=\"${CMAKE_SOURCE_DIR}\"
 ")

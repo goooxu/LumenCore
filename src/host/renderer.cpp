@@ -520,10 +520,43 @@ struct Renderer::Impl {
   }
 };
 
-Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
+// Declared in vulkan_renderer.cpp
+void render_vulkan(const Scene &scene, const Camera &camera, const RenderConfig &config);
+
+Renderer::Renderer() = default;
 Renderer::~Renderer() = default;
 
 void Renderer::render(const Scene &scene, const Camera &camera, const RenderConfig &config) {
+  std::string backend = config.backend;
+  // Env override for scripts / A-B tests without editing every scene.
+  if (const char *env = std::getenv("LUMENCORE_BACKEND")) {
+    if (env[0] != '\0') {
+      backend = env;
+    }
+  }
+  if (backend.empty()) {
+    backend = "vulkan";
+  }
+  for (char &c : backend) {
+    if (c >= 'A' && c <= 'Z') {
+      c = static_cast<char>(c - 'A' + 'a');
+    }
+  }
+
+  if (backend == "vulkan") {
+    render_vulkan(scene, camera, config);
+    return;
+  }
+  if (backend != "optix") {
+    throw std::runtime_error("Unknown RenderConfig.backend \"" + config.backend +
+                             "\" (expected \"optix\" or \"vulkan\"; override with LUMENCORE_BACKEND)");
+  }
+
+  // Lazy OptiX/CUDA context: skip when only using the Vulkan backend.
+  if (!impl_) {
+    impl_ = std::make_unique<Impl>();
+  }
+
   if (scene.meshes.empty()) {
     throw std::runtime_error("Scene has no meshes");
   }

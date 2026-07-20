@@ -1,5 +1,20 @@
 # 07 OptiX 实现
 
+## 双后端说明（迁移中）
+
+`RenderConfig.backend` 可选：
+
+| 值 | 行为 |
+|----|------|
+| `"vulkan"`（**默认**） | Vulkan RT 全功能路径追踪；首 hit albedo/normal AOV；`denoise=true` 时用 **OptiX Denoiser** 后处理 |
+| `"optix"` | 本章所述完整路径追踪 + 内嵌 OptiX Denoiser（回归 / 对照） |
+
+环境变量 `LUMENCORE_BACKEND=optix|vulkan` 可覆盖 `RenderConfig.backend`（含空默认）。
+
+构建开关：`LUMENCORE_ENABLE_VULKAN`（找到 Vulkan 时定义 `LUMENCORE_HAS_VULKAN`）。Python：`lumencore.vulkan_backend_available()`。SPIR-V 由 CMake/`glslangValidator` 从 `src/device/vulkan/` 编译，运行时 `NRTX_VK_SPV_DIR` 指向输出目录。
+
+目标架构：Vulkan Ray Tracing 与 OptiX 并行对照，功能对齐后再考虑切换默认后端。下文描述 **OptiX 路径**（当前生产后端）。
+
 ## OptiX 是什么？
 
 **OptiX** 是 NVIDIA 的光线追踪 SDK：你写「射线生成 / 命中 / 未命中」等程序，它用 GPU 上的 BVH + RT Core 做高速求交。

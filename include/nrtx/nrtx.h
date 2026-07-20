@@ -136,6 +136,8 @@ struct RenderConfig {
   int max_depth = 16;
   bool denoise = true;
   bool enable_nee = true;
+  /** Render backend: "vulkan" (default) or "optix" (legacy OptiX path tracer). */
+  std::string backend = "vulkan";
   std::string output_path = "out.avif";
 };
 
@@ -150,9 +152,22 @@ public:
   void render(const Scene &scene, const Camera &camera, const RenderConfig &config);
 
 private:
-  struct Impl;
+  struct Impl; // OptiX path tracer (lazy-created when backend=optix)
   std::unique_ptr<Impl> impl_;
 };
+
+/** True if this build linked Vulkan (LUMENCORE_ENABLE_VULKAN). */
+bool vulkan_backend_available();
+
+/** True if Vulkan path can denoise (OptiX Denoiser post-process on NVIDIA). */
+bool vulkan_denoise_available();
+
+/**
+ * OptiX HDR denoiser on host float RGB buffers (w*h*3 linear).
+ * beauty_rgb is updated in place. albedo/normal are guide buffers (same layout).
+ */
+void denoise_hdr_rgb(int width, int height, float *beauty_rgb, const float *albedo_rgb,
+                     const float *normal_rgb);
 
 Mesh make_quad(const float3 &corner, const float3 &u, const float3 &v, int material_id);
 Mesh make_box(const float3 &min_p, const float3 &max_p, int material_id);

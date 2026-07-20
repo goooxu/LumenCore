@@ -1,0 +1,372 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
+#include "bindings.glsl"
+#include "bsdf.glsl"
+#include "flame.glsl"
+
+layout(location = 0) rayPayloadEXT HitPayload payload;
+layout(location = 1) rayPayloadEXT ShadowPayload shadow_payload;
+
+float visibility(vec3 origin, vec3 dir, float tmax) {
+  shadow_payload.visible = 0u;
+  uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT |
+               gl_RayFlagsNoOpaqueEXT;
+  traceRayEXT(topLevelAS, flags, 0xFF, 0, 0, 1 /*miss*/, origin, TMIN, dir, tmax, 1);
+  return float(shadow_payload.visible);
+}
+
+float pdf_quad_light_solid_angle(QuadLight light, vec3 p_surf, vec3 p_light, int total_lights) {
+  vec3 lnormal = normalize(cross(light.u, light.v));
+  vec3 to_light = p_light - p_surf;
+  float dist2 = dot(to_light, to_light);
+  if (dist2 < 1e-12 || light.inv_area <= 0.0 || total_lights <= 0) {
+    return 0.0;
+  }
+  float dist = sqrt(dist2);
+  to_light /= dist;
+  float cos_light = abs(dot(lnormal, -to_light));
+  if (cos_light < 1e-6) {
+    return 0.0;
+  }
+  return light.inv_area * dist2 / (cos_light * float(total_lights));
+}
+
+float pdf_use_mis_quad_at_point(vec3 p_prev, vec3 p_hit) {
+  int total_lights = params.light_count + params.spot_count;
+  if (total_lights <= 0 || params.light_count <= 0) {
+    return 0.0;
+  }
+  for (int i = 0; i < params.light_count; ++i) {
+    QuadLight light = lights[i];
+    if (light.use_mis == 0 || light.inv_area <= 0.0) {
+      continue;
+    }
+    vec3 uu = light.u;
+    vec3 vv = light.v;
+    vec3 n = cross(uu, vv);
+    float n2 = dot(n, n);
+    if (n2 < 1e-12) {
+      continue;
+    }
+    n *= inversesqrt(n2);
+    vec3 d = p_hit - light.corner;
+    if (abs(dot(d, n)) > 1e-3 * max(1.0, length(d))) {
+      continue;
+    }
+    float A00 = dot(uu, uu);
+    float A01 = dot(uu, vv);
+    float A11 = dot(vv, vv);
+    float det = A00 * A11 - A01 * A01;
+    if (abs(det) < 1e-12) {
+      continue;
+    }
+    float b0 = dot(d, uu);
+    float b1 = dot(d, vv);
+    float a = (A11 * b0 - A01 * b1) / det;
+    float b = (-A01 * b0 + A00 * b1) / det;
+    const float kEps = 1e-3;
+    if (a < -kEps || a > 1.0 + kEps || b < -kEps || b > 1.0 + kEps) {
+      continue;
+    }
+    return pdf_quad_light_solid_angle(light, p_prev, p_hit, total_lights);
+  }
+  return 0.0;
+}
+
+void sample_quad_light_pos(QuadLight light, inout uint seed, out vec3 pos, out vec3 normal,
+                           out float pdf_area) {
+  float ru = rnd(seed);
+  float rv = rnd(seed);
+  pos = light.corner + light.u * ru + light.v * rv;
+  normal = normalize(cross(light.u, light.v));
+  pdf_area = light.inv_area;
+}
+
+void main() {
+  const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+  const ivec2 size = ivec2(gl_LaunchSizeEXT.xy);
+  if (pixel.x >= params.width || pixel.y >= params.height) {
+    return;
+  }
+
+  vec3 accum = vec3(0.0);
+  vec3 albedo_sum = vec3(0.0);
+  vec3 normal_sum = vec3(0.0);
+
+  for (int s = 0; s < params.samples_per_launch; ++s) {
+    uint seed = pcg_hash(uint(pixel.x) + uint(pixel.y) * 1973u +
+                         uint(params.sample_index + s) * 9277u + 1u);
+
+    float u = (float(pixel.x) + rnd(seed)) / float(size.x);
+    float v = (float(pixel.y) + rnd(seed)) / float(size.y);
+    float ndc_x = 2.0 * u - 1.0;
+    float ndc_y = 1.0 - 2.0 * v;
+
+    vec3 origin = params.camera.eye;
+    vec3 direction =
+        normalize(ndc_x * params.camera.U + ndc_y * params.camera.V + params.camera.W);
+
+    vec3 throughput = vec3(1.0);
+    vec3 radiance = vec3(0.0);
+    float last_pdf = 0.0;
+    vec3 prev_origin = origin;
+    vec3 medium_sigma = vec3(0.0);
+    vec3 aov_albedo = vec3(0.0);
+    vec3 aov_normal = vec3(0.0);
+    bool aov_set = false;
+
+    for (int depth = 0; depth < params.max_depth; ++depth) {
+      payload.hit = 0;
+      payload.seed = seed;
+      payload.radiance = vec3(0.0);
+
+      traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xFF, 0, 0, 0 /*miss*/, origin, TMIN,
+                  direction, TMAX, 0);
+
+      seed = payload.seed;
+
+      if (payload.hit == 0) {
+        // Beer absorption along miss (cap so underwater sky is tinted but finite)
+        if (medium_active(medium_sigma)) {
+          throughput *= beer_attenuate(medium_sigma, 20.0);
+        }
+        float mis_w = 1.0;
+        if (params.has_env != 0 && params.enable_nee != 0 && depth > 0 && last_pdf > 1e-8) {
+          float pdf_env = pdf_env_map(direction);
+          mis_w = mis_balance(last_pdf, pdf_env);
+        }
+        if (!aov_set) {
+          aov_albedo = payload.radiance;
+          aov_normal = -normalize(direction);
+          aov_set = true;
+        }
+        radiance += throughput * payload.radiance * mis_w;
+        break;
+      }
+
+      // Path segment absorption before shading (OptiX apply_medium_absorption)
+      float t_hit = max(payload.t_hit, 0.0);
+      if (medium_active(medium_sigma) && t_hit > 0.0) {
+        throughput *= beer_attenuate(medium_sigma, t_hit);
+      }
+
+      // Procedural flame volume proxy: march, add emission, continue past AABB
+      if ((payload.flags & MATERIAL_FLAG_VOLUME_FLAME) != 0 && payload.volume_index >= 0 &&
+          payload.volume_index < params.volume_count) {
+        if (!aov_set) {
+          aov_albedo = vec3(1.0, 0.45, 0.08);
+          aov_normal = normalize(payload.hit_normal);
+          aov_set = true;
+        }
+        FlameVolume vol = volumes[payload.volume_index];
+        vec3 Le_vol;
+        float Tr_vol;
+        vec3 new_origin;
+        integrate_flame_volume(vol, origin, direction, t_hit, seed, Le_vol, Tr_vol, new_origin);
+        radiance += throughput * Le_vol;
+        throughput *= Tr_vol;
+        origin = new_origin;
+        // direction unchanged
+        last_pdf = 0.0;
+        if (luminance(throughput) < 1e-4) {
+          break;
+        }
+        continue;
+      }
+
+      vec3 ng_geom = normalize(payload.hit_geom_normal);
+      vec3 ng = normalize(payload.hit_normal);
+      // Keep shading normal on same hemisphere as geometric
+      if (dot(ng, ng_geom) < 0.0) {
+        ng = -ng;
+      }
+      vec3 p = payload.hit_pos;
+      // Face classification uses geometric normal (open water / glass slabs)
+      bool front_facing = dot(direction, ng_geom) < 0.0;
+      vec3 n = front_facing ? ng : -ng;
+      vec3 wo = -direction;
+
+      // Opaque two-sided: force n toward wo when not glass
+      bool is_glass = payload.transmission > 0.5;
+      if (!is_glass && dot(n, wo) < 0.0) {
+        n = -n;
+      }
+
+      bool is_emissive = luminance(payload.emission) > 0.0;
+
+      if (!aov_set) {
+        if (is_emissive) {
+          aov_albedo = payload.base_color + clamp(payload.emission, vec3(0.0), vec3(1.0));
+        } else {
+          aov_albedo = payload.base_color;
+        }
+        aov_normal = n;
+        aov_set = true;
+      }
+
+      if (is_emissive) {
+        float mis_w = 1.0;
+        if (depth > 0 && last_pdf > 1e-8 && params.enable_nee != 0) {
+          float pdf_light = pdf_use_mis_quad_at_point(prev_origin, p);
+          if (pdf_light > 1e-8) {
+            mis_w = mis_balance(last_pdf, pdf_light);
+          }
+        }
+        radiance += throughput * payload.emission * mis_w;
+        break;
+      }
+
+      // NEE: opaque only; glass is BSDF-only. Medium Tr on NEE segment.
+      if (params.enable_nee != 0 && !is_glass) {
+        int total_lights = params.light_count + params.spot_count;
+        if (total_lights > 0) {
+          int light_idx = int(rnd(seed) * float(total_lights)) % total_lights;
+          if (light_idx < params.light_count) {
+            QuadLight light = lights[light_idx];
+            vec3 lpos, lnormal;
+            float pdf_area;
+            sample_quad_light_pos(light, seed, lpos, lnormal, pdf_area);
+            vec3 to_light = lpos - p;
+            float dist2 = dot(to_light, to_light);
+            float dist = sqrt(max(dist2, 1e-20));
+            to_light /= dist;
+            float cos_light = abs(dot(lnormal, -to_light));
+            float cos_surf = dot(n, to_light);
+            if (cos_surf > 0.0 && cos_light > 0.0 && pdf_area > 0.0) {
+              if (visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, to_light))), to_light,
+                             dist - 2.0 * TMIN) > 0.5) {
+                float pdf_light = pdf_area * dist2 / (cos_light * float(total_lights));
+                float pdf_bsdf = 0.0;
+                vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness, n,
+                                          wo, to_light, pdf_bsdf);
+                float w = (light.use_mis != 0) ? mis_balance(pdf_light, pdf_bsdf) : 1.0;
+                vec3 Tr = medium_active(medium_sigma) ? beer_attenuate(medium_sigma, dist) : vec3(1.0);
+                radiance += throughput * Tr * f * light.emission *
+                            (cos_surf * w / max(pdf_light, 1e-8));
+              }
+            }
+          } else {
+            SpotLight spot = spots[light_idx - params.light_count];
+            vec3 to_light = spot.position - p;
+            float dist2 = dot(to_light, to_light);
+            float dist = sqrt(max(dist2, 1e-20));
+            if (dist > 1e-4) {
+              to_light /= dist;
+              float cos_surf = dot(n, to_light);
+              float cos_aim = dot(-to_light, spot.direction);
+              if (cos_surf > 0.0 && cos_aim > spot.cos_outer) {
+                float cone = smoothstep_cone(spot.cos_outer, spot.cos_inner, cos_aim);
+                if (cone > 0.0 &&
+                    visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, to_light))), to_light,
+                               dist - 2.0 * TMIN) > 0.5) {
+                  float pdf_light = 1.0 / float(total_lights);
+                  float pdf_bsdf = 0.0;
+                  vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness,
+                                            n, wo, to_light, pdf_bsdf);
+                  vec3 Le = spot.emission * (cone / dist2);
+                  vec3 Tr = medium_active(medium_sigma) ? beer_attenuate(medium_sigma, dist) : vec3(1.0);
+                  radiance += throughput * Tr * f * Le * (cos_surf / max(pdf_light, 1e-8));
+                }
+              }
+            }
+          }
+        }
+
+        // HDRI NEE: skip while inside medium (infinite distance)
+        if (params.has_env != 0 && !medium_active(medium_sigma)) {
+          vec3 wi_env;
+          float pdf_env = 0.0;
+          vec3 Le = sample_env_map(seed, wi_env, pdf_env);
+          float cos_surf = dot(n, wi_env);
+          if (cos_surf > 0.0 && pdf_env > 1e-8 && luminance(Le) > 0.0) {
+            if (visibility(offset_ray_origin(p, ng_geom * sign(dot(ng_geom, wi_env))), wi_env, TMAX) >
+                0.5) {
+              float pdf_bsdf = 0.0;
+              vec3 f = eval_opaque_bsdf(payload.base_color, payload.metallic, payload.roughness, n,
+                                        wo, wi_env, pdf_bsdf);
+              float w = mis_balance(pdf_env, pdf_bsdf);
+              radiance += throughput * f * Le * (cos_surf * w / pdf_env);
+            }
+          }
+        }
+      }
+
+      prev_origin = origin;
+      BsdfSample samp;
+      samp.valid = false;
+      samp.transmitted = false;
+      samp.pdf = 0.0;
+      samp.f = vec3(0.0);
+      samp.wi = vec3(0.0);
+
+      if (is_glass) {
+        // Dielectric: front_facing from geometric normal; BSDF along shading n hemisphere
+        samp = sample_dielectric_bsdf(seed, payload.base_color, payload.roughness, payload.ior, n, wo,
+                                      front_facing);
+        if (!samp.valid) {
+          break;
+        }
+        throughput *= samp.f; // MC weight already includes cos/pdf
+        last_pdf = 0.0;
+        if (samp.transmitted) {
+          // Enter medium on front-facing transmission; exit on back-face
+          if (front_facing) {
+            medium_sigma = payload.absorption;
+          } else {
+            medium_sigma = vec3(0.0);
+          }
+        }
+      } else {
+        samp = sample_opaque_bsdf(seed, payload.base_color, payload.metallic, payload.roughness, n,
+                                  wo);
+        if (!samp.valid) {
+          break;
+        }
+        float cos_i = max(dot(n, samp.wi), 0.0);
+        throughput *= samp.f * cos_i / max(samp.pdf, 1e-8);
+        last_pdf = samp.pdf;
+      }
+
+      // Offset along geometric normal toward outgoing direction (handles transmission)
+      vec3 n_off = ng_geom * (dot(samp.wi, ng_geom) >= 0.0 ? 1.0 : -1.0);
+      origin = offset_ray_origin(p, n_off);
+      direction = samp.wi;
+
+      if (depth >= 3) {
+        float q = clamp(luminance(throughput), 0.05, 0.95);
+        if (rnd(seed) > q) {
+          break;
+        }
+        throughput /= q;
+      }
+      if (luminance(throughput) < 1e-4) {
+        break;
+      }
+    }
+
+    accum += radiance;
+    albedo_sum += aov_albedo;
+    normal_sum += aov_normal;
+  }
+
+  // Progressive accumulation: sample_index is absolute sample base; batch sums in accum/*_sum.
+  float n_old = float(params.sample_index);
+  float n_new = n_old + float(params.samples_per_launch);
+  vec4 prev = imageLoad(accumImage, pixel);
+  vec3 color = (prev.rgb * n_old + accum) / max(n_new, 1.0);
+  vec3 pa = imageLoad(albedoImage, pixel).rgb;
+  vec3 albedo = (pa * n_old + albedo_sum) / max(n_new, 1.0);
+  vec3 pn = imageLoad(normalImage, pixel).rgb;
+  vec3 normal = (pn * n_old + normal_sum) / max(n_new, 1.0);
+  float nlen = length(normal);
+  if (nlen > 1e-6) {
+    normal /= nlen;
+  }
+  imageStore(accumImage, pixel, vec4(color, 1.0));
+  imageStore(albedoImage, pixel, vec4(albedo, 1.0));
+  imageStore(normalImage, pixel, vec4(normal, 1.0));
+}
