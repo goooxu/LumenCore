@@ -262,6 +262,86 @@ __forceinline__ __device__ float3 sample_quad_light(const nrtx::QuadLight &light
   return light.emission;
 }
 
+/** Solid-angle pdf of a quad light sample, including 1/total_lights selection (matches NEE). */
+__forceinline__ __device__ float pdf_quad_light_solid_angle(const nrtx::QuadLight &light,
+                                                           const float3 &p_surf, const float3 &p_light,
+                                                           int total_lights) {
+  float3 lnormal = nrtx::normalize(nrtx::cross(light.u, light.v));
+  float3 to_light = p_light - p_surf;
+  const float dist2 = nrtx::dot(to_light, to_light);
+  if (dist2 < 1e-12f || light.inv_area <= 0.0f || total_lights <= 0) {
+    return 0.0f;
+  }
+  const float dist = sqrtf(dist2);
+  to_light = to_light / dist;
+  const float cos_light = fabsf(nrtx::dot(lnormal, -to_light));
+  if (cos_light < 1e-6f) {
+    return 0.0f;
+  }
+  // pdf_area * dist^2 / cos_light / total_lights
+  return light.inv_area * dist2 / (cos_light * static_cast<float>(total_lights));
+}
+
+/**
+ * If p lies on a use_mis quad (same plane + uv in [0,1]), return solid-angle pdf from p_prev
+ * toward p; else 0. Used for emissive-hit MIS.
+ */
+__forceinline__ __device__ float pdf_use_mis_quad_at_point(const float3 &p_prev, const float3 &p_hit) {
+  const int total_lights = params.light_count + params.spot_count;
+  if (total_lights <= 0 || params.light_count <= 0 || !params.lights) {
+    return 0.0f;
+  }
+  for (int i = 0; i < params.light_count; ++i) {
+    const nrtx::QuadLight &light = params.lights[i];
+    if (!light.use_mis || light.inv_area <= 0.0f) {
+      continue;
+    }
+    const float3 uu = light.u;
+    const float3 vv = light.v;
+    float3 n = nrtx::cross(uu, vv);
+    const float n2 = nrtx::dot(n, n);
+    if (n2 < 1e-12f) {
+      continue;
+    }
+    n = n * rsqrtf(n2);
+    const float3 d = p_hit - light.corner;
+    // Plane test (allow small numerical thickness).
+    if (fabsf(nrtx::dot(d, n)) > 1e-3f * fmaxf(1.0f, sqrtf(nrtx::dot(d, d)))) {
+      continue;
+    }
+    // Solve d ≈ a*u + b*v in the plane (Gram system).
+    const float A00 = nrtx::dot(uu, uu);
+    const float A01 = nrtx::dot(uu, vv);
+    const float A11 = nrtx::dot(vv, vv);
+    const float det = A00 * A11 - A01 * A01;
+    if (fabsf(det) < 1e-12f) {
+      continue;
+    }
+    const float b0 = nrtx::dot(d, uu);
+    const float b1 = nrtx::dot(d, vv);
+    const float a = (A11 * b0 - A01 * b1) / det;
+    const float b = (-A01 * b0 + A00 * b1) / det;
+    constexpr float kEps = 1e-3f;
+    if (a < -kEps || a > 1.0f + kEps || b < -kEps || b > 1.0f + kEps) {
+      continue;
+    }
+    return pdf_quad_light_solid_angle(light, p_prev, p_hit, total_lights);
+  }
+  return 0.0f;
+}
+
+__forceinline__ __device__ bool medium_active(const RadiancePRD *prd) {
+  return prd->medium_sigma.x > 0.0f || prd->medium_sigma.y > 0.0f || prd->medium_sigma.z > 0.0f;
+}
+
+/** One-way Beer–Lambert along a NEE segment while inside a homogeneous medium. */
+__forceinline__ __device__ float3 medium_transmittance(const RadiancePRD *prd, float dist) {
+  if (dist <= 0.0f || !medium_active(prd)) {
+    return make_float3(1.0f, 1.0f, 1.0f);
+  }
+  return beer_attenuate(prd->medium_sigma, dist);
+}
+
 __forceinline__ __device__ float fractf(float x) { return x - floorf(x); }
 
 __forceinline__ __device__ float hash31(float3 p) {
@@ -689,9 +769,20 @@ extern "C" __global__ void __closesthit__radiance() {
     prd->first_hit = 0;
   }
 
-  prd->radiance += prd->throughput * mat.emission;
+  // Emissive surface as path endpoint. Camera rays (depth==0): full weight.
+  // For use_mis area lamps hit via BSDF: balance MIS with light pdf (matches NEE side).
+  {
+    float mis_w = 1.0f;
+    if (is_emissive && prd->depth > 0 && prd->last_pdf > 1e-8f && params.enable_nee) {
+      const float pdf_light = pdf_use_mis_quad_at_point(ray_origin, p);
+      if (pdf_light > 1e-8f) {
+        mis_w = nrtx::mis_balance(prd->last_pdf, pdf_light);
+      }
+    }
+    prd->radiance += prd->throughput * mat.emission * mis_w;
+  }
 
-  // Area lights / emissive surfaces are path endpoints (standard unbiased treatment).
+  // Area lights / emissive surfaces are path endpoints (standard treatment).
   if (is_emissive) {
     prd->done = 1;
     return;
@@ -700,7 +791,7 @@ extern "C" __global__ void __closesthit__radiance() {
   const float3 wo = -ray_dir;
   const bool is_glass = mat.transmission > 0.5f;
 
-  // Next-event estimation: area/spot lights + HDRI (opaque only)
+  // Next-event estimation: area/spot lights + HDRI (opaque only; glass: BSDF-only in v1)
   if (params.enable_nee && !is_glass) {
     const int total_lights = params.light_count + params.spot_count;
     if (total_lights > 0) {
@@ -726,7 +817,10 @@ extern "C" __global__ void __closesthit__radiance() {
                 nrtx::eval_opaque_bsdf(base, mat.metallic, mat.roughness, n, wo, to_light, pdf_bsdf);
             const float w =
                 light.use_mis ? nrtx::mis_balance(pdf_light, pdf_bsdf) : 1.0f;
-            prd->radiance += prd->throughput * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
+            // One-way medium transmittance along the NEE segment (shadow ignores glass).
+            const float3 Tr = medium_transmittance(prd, dist);
+            prd->radiance +=
+                prd->throughput * Tr * f * Le * (cos_surf * w / fmaxf(pdf_light, 1e-8f));
           }
         }
       } else {
@@ -748,15 +842,17 @@ extern "C" __global__ void __closesthit__radiance() {
                                                      to_light, pdf_bsdf);
               (void)pdf_bsdf;
               const float3 Le = spot.emission * (cone / dist2);
-              prd->radiance += prd->throughput * f * Le * (cos_surf / fmaxf(pdf_light, 1e-8f));
+              const float3 Tr = medium_transmittance(prd, dist);
+              prd->radiance +=
+                  prd->throughput * Tr * f * Le * (cos_surf / fmaxf(pdf_light, 1e-8f));
             }
           }
         }
       }
     }
 
-    // HDRI next-event estimation
-    if (params.has_env) {
+    // HDRI next-event estimation (skip while inside a medium: infinite distance).
+    if (params.has_env && !medium_active(prd)) {
       float3 wi_env;
       float pdf_env = 0.0f;
       const float3 Le = sample_env_map(prd->seed, wi_env, pdf_env);
@@ -779,7 +875,7 @@ extern "C" __global__ void __closesthit__radiance() {
   float pdf = 0.0f;
 
   if (is_glass) {
-    // GGX microfacet dielectric (rough glass). No NEE/MIS in v1.
+    // GGX microfacet dielectric (rough glass). NEE/MIS for glass still deferred (v1).
     const nrtx::BsdfSample samp = nrtx::sample_dielectric_bsdf(
         prd->seed, base, mat.roughness, mat.ior, n, wo, front_facing);
     if (!samp.valid) {

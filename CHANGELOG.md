@@ -18,9 +18,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `docker/run.sh` / `render_gallery.sh` default PhysX path to the CMake build tree
 - Removed `scripts/setup_physx.sh` (use `./scripts/build.sh` / CMake fetch)
 - `scripts/render_gallery.sh`: per-feature `NEE_SPP` / `DENOISER_SPP`; NEE and Beer compares pass `--denoise 0`
+- Docs: `docs/report/05-nee-mis-hdri.md` and `06-volumes-media.md` describe two-sided area-light MIS and medium-aware NEE
+- **Re-rendered sample AVIFs** after estimator fix: cornell, materials_ball, outdoor_env, water_pool, fireplace, physx_collapse (+ frames), gallery showcase/dusk/assembly, compare nee on/off
 
 ### Fixed
 
+- **Path estimator (opaque lights + media)**:
+  - Emissive hits on `use_mis` area lamps now apply balance MIS with the same solid-angle light pdf as NEE (depth 0 stays weight 1)
+  - NEE through a homogeneous medium multiplies one-way Beer–Lambert $e^{-\sigma d}$ (quad/spot); env NEE is skipped while `medium_sigma ≠ 0`
+  - Glass remains BSDF-only (no NEE/MIS) in this release
 - **Gallery feature compares** (NEE / Denoiser / Beer-Lambert) were hard to tell ON from OFF:
   - **NEE**: force denoise off, smaller ceiling lamp, lower spp (48) so OFF is visibly noisy
   - **Denoiser**: lower spp (10), brighter scene + checker floor so grain vs clean reads at thumbnail size
